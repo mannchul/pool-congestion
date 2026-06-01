@@ -135,7 +135,7 @@ def _parse_congestion_with_bs4(html: str) -> Dict | None:
     if not HAS_BS4:
         return None
 
-    soup = BeautifulSoup(html, "lxml")
+    soup = BeautifulSoup(html, "html.parser")
 
     # Strategy 1: Find the main utilization element
     # Look for elements with data-util attribute (man/woman indicators)
