@@ -1473,14 +1473,6 @@ HTML_PAGE = """<!DOCTYPE html>
     <!-- Pool info -->
     <div class="info-grid animate-in animate-in-delay-3">
       <div class="info-item">
-        <div class="label">📍 주소</div>
-        <div class="value" id="address">--</div>
-      </div>
-      <div class="info-item">
-        <div class="label">📞 전화</div>
-        <div class="value" id="phone">--</div>
-      </div>
-      <div class="info-item">
         <div class="label">🕐 평일 운영</div>
         <div class="value" id="weekday-hours">--</div>
       </div>
@@ -1903,8 +1895,6 @@ async function fetchData() {
 
     // Pool info
     const p = data.pool;
-    document.getElementById('address').textContent = p.address;
-    document.getElementById('phone').textContent = p.phone;
     document.getElementById('weekday-hours').textContent = p.weekday_hours;
     document.getElementById('weekend-hours').textContent = p.weekend_hours;
 
