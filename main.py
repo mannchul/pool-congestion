@@ -487,9 +487,11 @@ async def get_congestion():
     current["closed_reason"] = closed_reason
 
     forecast = _hourly_forecast(now)
+    trend = _daily_trend(now)
     return {
         "current": current,
         "forecast": forecast,
+        "trend": trend,
         "pool": POOL_INFO,
         "time": now.strftime("%Y-%m-%d %H:%M"),
     }
@@ -1275,16 +1277,20 @@ HTML_PAGE = """<!DOCTYPE html>
     border: 1px solid rgba(239, 68, 68, 0.12);
   }
 
-  /* ── Trend chart ─────────────────────────────────────── */
-  .trend-card {
-    padding: 20px 16px 12px;
-    overflow: hidden;
-  }
-  .trend-card canvas {
+  /* ── Trend chart (integrated mini) ────────────────────── */
+  .forecast-trend {
     width: 100%;
-    height: auto;
-    display: block;
+    height: 60px;
+    margin-bottom: 16px;
+    position: relative;
+    overflow: hidden;
     border-radius: var(--radius-xs);
+    background: rgba(0, 0, 0, 0.12);
+  }
+  .forecast-trend canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
   }
 
   /* ── Forecast ─────────────────────────────────────────── */
@@ -1771,7 +1777,7 @@ HTML_PAGE = """<!DOCTYPE html>
     .forecast-item .bar { width: 16px; }
     .forecast-item .bar-wrap { height: 40px; }
     .forecast-item .f-label { font-size: 0.62rem; }
-    .trend-card { padding: 14px 10px 8px; }
+    .forecast-trend { height: 42px; margin-bottom: 12px; }
     .error-state .retry-btn { padding: 10px 24px; font-size: 0.82rem; }
     .loading { padding: 60px 14px; }
     .loading .spinner { width: 36px; height: 36px; }
@@ -1909,28 +1915,20 @@ HTML_PAGE = """<!DOCTYPE html>
       </div>
     </div>
 
-    <!-- Hourly forecast -->
+    <!-- Hourly forecast + trend (integrated) -->
     <div class="forecast-section animate-in animate-in-delay-4">
       <div class="section-title">
-        <span>📊</span> 시간대별 예상 혼잡도
+        <span>📊</span> 시간대별 혼잡도 트렌드
         <span class="badge-count" id="forecast-count">13시간</span>
+      </div>
+      <div class="forecast-trend" id="forecast-trend">
+        <canvas id="trend-canvas" width="880" height="60"></canvas>
       </div>
       <div class="forecast-scroll-wrap" id="forecast-scroll-wrap">
         <div class="forecast-grid" id="forecast-grid">
           <!-- Filled by JS -->
         </div>
         <div class="scroll-hint">← 좌우로 스크롤 →</div>
-      </div>
-    </div>
-
-    <!-- Daily trend chart -->
-    <div class="forecast-section animate-in animate-in-delay-5">
-      <div class="section-title">
-        <span>📈</span> 오늘 혼잡도 트렌드
-        <span class="badge-count" id="trend-count">전체</span>
-      </div>
-      <div class="trend-card glass-card">
-        <canvas id="trend-canvas" width="800" height="220"></canvas>
       </div>
     </div>
 
@@ -2084,9 +2082,10 @@ function setGenderRates(male, female) {
   animateBar(femaleBar, Math.min(female, 100));
 }
 
-// ── Trend chart (Canvas) ─────────────────────────────────────────────────────
+// ── Trend chart (mini, integrated with forecast) ─────────────────────────────
 function renderTrendChart(trend) {
   const canvas = document.getElementById('trend-canvas');
+  if (!canvas) return;
   const ctx = canvas.getContext('2d');
   const w = canvas.width;
   const h = canvas.height;
@@ -2094,32 +2093,21 @@ function renderTrendChart(trend) {
   ctx.clearRect(0, 0, w, h);
 
   const count = trend.length;
-  if (count < 2) return;
+  if (count < 2) {
+    // Show empty state
+    ctx.fillStyle = 'rgba(126, 147, 176, 0.2)';
+    ctx.font = '10px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('데이터 없음', w / 2, h / 2 + 3);
+    return;
+  }
 
-  const pad = { top: 20, bottom: 32, left: 42, right: 32 };
+  const pad = { top: 6, bottom: 4, left: 4, right: 4 };
   const chartW = w - pad.left - pad.right;
   const chartH = h - pad.top - pad.bottom;
   const maxLevel = 100;
 
-  // Grid lines
-  ctx.strokeStyle = 'rgba(56, 189, 248, 0.05)';
-  ctx.lineWidth = 1;
-  ctx.setLineDash([4, 4]);
-  for (let lv = 0; lv <= 100; lv += 25) {
-    const y = pad.top + chartH - (lv / maxLevel) * chartH;
-    ctx.beginPath();
-    ctx.moveTo(pad.left, y);
-    ctx.lineTo(w - pad.right, y);
-    ctx.stroke();
-    // Y-axis labels
-    ctx.fillStyle = 'rgba(126, 147, 176, 0.35)';
-    ctx.font = '9px sans-serif';
-    ctx.textAlign = 'right';
-    ctx.fillText(lv + '%', pad.left - 6, y + 3);
-  }
-  ctx.setLineDash([]);
-
-  // Build path
+  // Build points
   const points = trend.map((d, i) => ({
     x: pad.left + (i / (count - 1)) * chartW,
     y: pad.top + chartH - (d.level / maxLevel) * chartH,
@@ -2128,6 +2116,17 @@ function renderTrendChart(trend) {
     hour: d.hour,
   }));
 
+  // Current time marker (find the hour closest to now in KST)
+  const now = getKST();
+  const nowHour = now.getHours() + now.getMinutes() / 60;
+  let nowIdx = -1;
+  for (let i = 0; i < trend.length; i++) {
+    const hh = parseInt(trend[i].hour.split(':')[0]);
+    const mm = parseInt(trend[i].hour.split(':')[1]);
+    const t = hh + mm / 60;
+    if (t <= nowHour) nowIdx = i;
+  }
+
   // Fill area with gradient
   ctx.beginPath();
   ctx.moveTo(points[0].x, pad.top + chartH);
@@ -2135,14 +2134,14 @@ function renderTrendChart(trend) {
   ctx.lineTo(points[points.length - 1].x, pad.top + chartH);
   ctx.closePath();
   const grad = ctx.createLinearGradient(0, pad.top, 0, pad.top + chartH);
-  grad.addColorStop(0, 'rgba(56, 189, 248, 0.15)');
-  grad.addColorStop(0.4, 'rgba(56, 189, 248, 0.06)');
+  grad.addColorStop(0, 'rgba(56, 189, 248, 0.12)');
+  grad.addColorStop(0.5, 'rgba(56, 189, 248, 0.04)');
   grad.addColorStop(1, 'rgba(56, 189, 248, 0.005)');
   ctx.fillStyle = grad;
   ctx.fill();
 
   // Draw line segments with per-segment color
-  ctx.lineWidth = 2.5;
+  ctx.lineWidth = 2;
   ctx.lineJoin = 'round';
   ctx.lineCap = 'round';
   for (let i = 0; i < points.length - 1; i++) {
@@ -2153,45 +2152,55 @@ function renderTrendChart(trend) {
     ctx.moveTo(p1.x, p1.y);
     ctx.lineTo(p2.x, p2.y);
     ctx.strokeStyle = segColor;
-    ctx.lineWidth = 2.5;
     ctx.stroke();
   }
 
-  // Draw dots with glow
-  points.forEach(p => {
-    // Glow
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, 6, 0, Math.PI * 2);
-    ctx.fillStyle = p.color + '20';
-    ctx.fill();
+  // Draw dots
+  points.forEach((p, i) => {
+    const isPast = i <= nowIdx;
+    const isNow = i === nowIdx;
+    const alpha = isPast ? 0.5 : 1;
+
+    // Glow for current time
+    if (isNow) {
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 8, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(56, 189, 248, 0.12)';
+      ctx.fill();
+    }
 
     // Main dot
     ctx.beginPath();
-    ctx.arc(p.x, p.y, 3.5, 0, Math.PI * 2);
-    ctx.fillStyle = p.color;
+    ctx.arc(p.x, p.y, isNow ? 4 : 2.5, 0, Math.PI * 2);
+    ctx.fillStyle = isPast ? p.color + '99' : p.color;
     ctx.fill();
-    ctx.strokeStyle = 'rgba(4, 10, 24, 0.5)';
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
+    if (isNow) {
+      ctx.strokeStyle = 'rgba(56, 189, 248, 0.5)';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    }
 
-    // X-axis labels
-    ctx.fillStyle = 'rgba(126, 147, 176, 0.4)';
-    ctx.font = '9px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText(p.hour, p.x, h - pad.bottom + 18);
+    // Hour labels (every other, plus first/last)
+    if (i === 0 || i === count - 1 || i % 3 === 0) {
+      ctx.fillStyle = isPast ? 'rgba(126, 147, 176, 0.2)' : 'rgba(126, 147, 176, 0.35)';
+      ctx.font = '7px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(p.hour, p.x, h - 1);
+    }
   });
 
-  // High / low markers
-  const max = points.reduce((a, b) => a.level > b.level ? a : b);
-  const min = points.reduce((a, b) => a.level < b.level ? a : b);
-
-  ctx.fillStyle = 'rgba(248, 113, 113, 0.7)';
-  ctx.font = 'bold 9px sans-serif';
-  ctx.textAlign = 'left';
-  ctx.fillText('▲ 최고 ' + max.level + '% (' + max.hour + ')', max.x + 8, max.y - 4);
-
-  ctx.fillStyle = 'rgba(74, 222, 128, 0.7)';
-  ctx.fillText('▼ 최저 ' + min.level + '% (' + min.hour + ')', pad.left, pad.top + chartH - 6);
+  // Current time vertical line
+  if (nowIdx >= 0 && nowIdx < points.length) {
+    const p = points[nowIdx];
+    ctx.beginPath();
+    ctx.moveTo(p.x, pad.top);
+    ctx.lineTo(p.x, pad.top + chartH);
+    ctx.strokeStyle = 'rgba(56, 189, 248, 0.15)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 3]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
 }
 
 // ── Forecast renderer ─────────────────────────────────────────────────────────
@@ -2264,19 +2273,6 @@ async function fetchWeeklySchedule() {
     renderWeeklySchedule(data.schedule);
   } catch (err) {
     console.warn('Weekly schedule fetch failed:', err.message);
-  }
-}
-
-// ── Fetch trend data ─────────────────────────────────────────────────────────
-async function fetchTrend() {
-  try {
-    const res = await fetch('/api/daily-trend');
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-    document.getElementById('trend-count').textContent = `${data.trend.length}시간`;
-    renderTrendChart(data.trend);
-  } catch (err) {
-    console.warn('Trend chart fetch failed:', err.message);
   }
 }
 
@@ -2395,6 +2391,9 @@ async function fetchData() {
     document.getElementById('weekday-hours').textContent = p.weekday_hours;
     document.getElementById('weekend-hours').textContent = p.weekend_hours;
 
+    // Trend chart (from embedded trend data)
+    renderTrendChart(data.trend);
+
     // Forecast
     renderForecast(data.forecast);
 
@@ -2412,11 +2411,9 @@ updateClock();
 setInterval(updateClock, 1000);
 
 fetchData();
-fetchTrend();
 fetchWeeklySchedule();
 
 setInterval(fetchData, 60000);
-setInterval(fetchTrend, 120000);
 setInterval(fetchWeeklySchedule, 300000); // Refresh weekly schedule every 5 min
 </script>
 </body>
