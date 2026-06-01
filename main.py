@@ -122,6 +122,90 @@ _LIVE_HEADERS = {
 }
 
 
+# ── Known historical patterns (from real jjss.or.kr data analysis) ──────────
+# Raw hourly user counts observed from the actual website.
+# Used as default predictions when live scraping is unavailable.
+_KNOWN_HISTORICAL_PATTERNS: dict = {
+    "weekday": {
+        # Based on Monday June 1, 2026 — actual observed user counts
+        # Pattern: morning PEAK at 06시 → gradual decline → lunch break →
+        #          afternoon moderate → evening very quiet
+        6: 88, 7: 31, 8: 29, 9: 54, 10: 40,
+        11: 5, 12: 4, 13: 39, 14: 16, 15: 22,
+        16: 10, 17: 0, 18: 0, 19: 0, 20: 0,
+    },
+    "saturday": {
+        # Estimated based on typical Saturday pool usage patterns
+        # (no direct observation data yet)
+        6: 30, 7: 35, 8: 50, 9: 60, 10: 70,
+        11: 65, 12: 60, 13: 55, 14: 45, 15: 35,
+        16: 25, 17: 15,
+    },
+    "sunday": {
+        # Based on Sunday May 31, 2026 — actual observed user counts from history page
+        # Pattern: late start (10시) → afternoon PEAK at 15시 → steep drop
+        10: 56, 11: 41, 12: 17, 13: 40, 14: 41,
+        15: 60, 16: 7, 17: 0,
+    },
+}
+
+# Default calibration levels by day type (typical congestion % at current hour)
+_DEFAULT_DAY_LEVELS: dict = {
+    "weekday": 18,    # 18% typical for weekday 16시
+    "saturday": 55,   # 55% typical for Saturday 14시
+    "sunday": 50,     # 50% typical for Sunday 15시
+}
+
+
+def _get_default_forecast(now: datetime) -> dict | None:
+    """Generate default congestion forecast using known historical patterns.
+
+    Uses the day-type-matched pattern and calibrates to a default level.
+    Returns {hour: level} or None if no pattern matches.
+    """
+    day_type = _get_day_type(now)
+    pattern = _KNOWN_HISTORICAL_PATTERNS.get(day_type)
+    if not pattern:
+        return None
+
+    current_hour = now.hour
+    current_val = pattern.get(current_hour, 0)
+    if current_val == 0:
+        for h in range(current_hour - 1, 0, -1):
+            if pattern.get(h, 0) > 0:
+                current_val = pattern[h]
+                break
+    if current_val == 0:
+        return None
+
+    default_level = _DEFAULT_DAY_LEVELS.get(day_type, 30)
+    factor = default_level / current_val if current_val > 0 else 1.0
+
+    levels = {}
+    for hour, val in pattern.items():
+        if val == 0:
+            continue
+        est = round(val * factor)
+        est = max(0, min(est, 95))
+        levels[hour] = est
+    return levels if levels else None
+
+
+def _init_default_predictions() -> None:
+    """Pre-populate historical predictions with known patterns at startup.
+
+    This ensures the forecast works even when live scraping is unavailable
+    (e.g., on Vercel where jjss.or.kr blocks requests from overseas IPs).
+    """
+    global _HISTORICAL_PREDICTIONS, _HISTORICAL_DATE
+    now = datetime.now(ZoneInfo("Asia/Seoul"))
+    predictions = _get_default_forecast(now)
+    if predictions:
+        _HISTORICAL_PREDICTIONS.clear()
+        _HISTORICAL_PREDICTIONS.update(predictions)
+        _HISTORICAL_DATE = now.strftime("%Y-%m-%d")
+
+
 def _try_fetch_url(url: str, timeout: int = 10) -> bytes | None:
     """Try to fetch a URL using urllib with proper headers and SSL handling."""
     try:
@@ -430,6 +514,10 @@ def _get_day_type(now: datetime) -> str:
         return "weekday"
 
 
+# Call at module load so defaults are available immediately
+_init_default_predictions()
+
+
 # ── Congestion estimation logic ─────────────────────────────────────────────
 
 def _estimate_congestion(now: datetime) -> Dict:
@@ -465,23 +553,33 @@ def _estimate_congestion(now: datetime) -> Dict:
     weekday = now.weekday()  # 0=Mon … 6=Sun
 
     if weekday == 6:
-        # ── Sunday / Holiday ──
-        day_type = "일요일·공휴일"
-        if 10 <= hour < 11:
-            level, label, tip = 20, "여유", "일요일은 오전 10시에 개장합니다. 개장 직후 한적해요!"
-            male_rate, female_rate, status = 18, 22, "운영중"
-        elif 11 <= hour < 13:
-            level, label, tip = 55, "보통", "일요일 오전, 가족 단위 방문객이 늘기 시작합니다."
-            male_rate, female_rate, status = 50, 60, "운영중"
-        elif 13 <= hour < 15:
-            level, label, tip = 75, "혼잡", "일요일 오후 피크 시간입니다. 방문 시 참고하세요."
-            male_rate, female_rate, status = 70, 80, "운영중"
-        elif 15 <= hour <= 17:
-            level, label, tip = 50, "보통", "일요일 오후 늦게는 비교적 한산해집니다."
-            male_rate, female_rate, status = 45, 55, "운영중"
-        else:
-            level, label, tip = 10, "여유", "현재 운영 시간이 아닙니다. (일요일 10:00~17:00)"
-            male_rate, female_rate, status = 5, 5, "운영종료"
+            # ── Sunday / Holiday ──
+            # Based on analysis of actual Sunday May 31, 2026 jjss.or.kr data:
+            # Late start (10시) → gradual build-up → afternoon PEAK at 15시 (60 users)
+            # → steep drop after 15시
+            # See _KNOWN_HISTORICAL_PATTERNS for raw data.
+            day_type = "일요일·공휴일"
+            if 10 <= hour < 11:
+                level, label, tip = 45, "보통", "일요일 개장 직후, 방문객이 빠르게 증가합니다."
+                male_rate, female_rate, status = 40, 50, "운영중"
+            elif 11 <= hour < 12:
+                level, label, tip = 40, "보통", "일요일 오전, 가족 단위 방문객이 꾸준합니다."
+                male_rate, female_rate, status = 35, 45, "운영중"
+            elif 12 <= hour < 13:
+                level, label, tip = 20, "여유", "일요일 점심 시간, 비교적 한산합니다."
+                male_rate, female_rate, status = 18, 22, "운영중"
+            elif 13 <= hour < 15:
+                level, label, tip = 55, "보통", "일요일 오후, 방문객이 다시 증가하는 시간입니다."
+                male_rate, female_rate, status = 50, 60, "운영중"
+            elif 15 <= hour < 16:
+                level, label, tip = 65, "보통", "⚠️ 일요일 오후 피크 시간입니다. 가장 혼잡하니 참고하세요!"
+                male_rate, female_rate, status = 60, 70, "운영중"
+            elif 16 <= hour <= 17:
+                level, label, tip = 25, "여유", "일요일 오후 늦게, 방문객이 급감합니다."
+                male_rate, female_rate, status = 20, 30, "운영중"
+            else:
+                level, label, tip = 10, "여유", "현재 운영 시간이 아닙니다. (일요일 10:00~17:00)"
+                male_rate, female_rate, status = 5, 5, "운영종료"
 
     elif weekday == 5:
         # ── Saturday ──
@@ -507,19 +605,20 @@ def _estimate_congestion(now: datetime) -> Dict:
 
     else:
         # ── Weekday ──
-        # Based on analysis of actual jjss.or.kr chart data:
-        # Morning has the most users (06~08시 peak), then steadily drops
-        # Afternoon is consistently quiet (10~20% range)
+        # Based on analysis of actual Monday June 1, 2026 jjss.or.kr data:
+        # Morning PEAK at 06시 (88 users) → gradual decline → lunch break →
+        # afternoon moderate → evening very quiet (0 users after 17시)
+        # See _KNOWN_HISTORICAL_PATTERNS for raw data.
         day_type = "평일"
         if 6 <= hour < 8:
-            level, label, tip = 35, "여유", "아침 시간대, 비교적 한적하게 수영할 수 있습니다."
-            male_rate, female_rate, status = 35, 35, "운영중"
+            level, label, tip = 55, "보통", "🌅 아침 시간대, 평일 중 가장 혼잡합니다. 개장 직후 많은 이용객이 방문해요!"
+            male_rate, female_rate, status = 55, 55, "운영중"
         elif 8 <= hour < 10:
-            level, label, tip = 25, "여유", "오전 시간, 방문객이 점차 줄어듭니다."
-            male_rate, female_rate, status = 25, 25, "운영중"
+            level, label, tip = 45, "보통", "오전 시간, 아침 피크가 지나며 방문객이 점차 감소합니다."
+            male_rate, female_rate, status = 45, 45, "운영중"
         elif 10 <= hour < 11:
-            level, label, tip = 15, "여유", "오전 늦게, 한적한 시간대입니다."
-            male_rate, female_rate, status = 15, 15, "운영중"
+            level, label, tip = 40, "보통", "오전 늦게, 비교적 여유로운 시간입니다."
+            male_rate, female_rate, status = 40, 40, "운영중"
         elif 11 <= hour < 12:
             level, label, tip = 12, "여유", "점심 전 가장 한적한 시간입니다."
             male_rate, female_rate, status = 10, 14, "운영중"
@@ -527,20 +626,20 @@ def _estimate_congestion(now: datetime) -> Dict:
             level, label, tip = 0, "수질정화시간", "⚠️ 수질정화시간(12:00~13:00)입니다. 시설 정비 시간이니 참고하세요."
             male_rate, female_rate, status = 0, 0, "수질정화시간"
         elif 13 <= hour < 14:
-            level, label, tip = 30, "여유", "점심 이후, 방문객이 다시 증가합니다."
-            male_rate, female_rate, status = 30, 30, "운영중"
+            level, label, tip = 45, "보통", "점심 이후, 오후 피크 시간입니다. 방문객이 다시 증가합니다."
+            male_rate, female_rate, status = 45, 45, "운영중"
         elif 14 <= hour < 15:
-            level, label, tip = 22, "여유", "오후 시간대, 비교적 여유롭습니다."
-            male_rate, female_rate, status = 20, 24, "운영중"
+            level, label, tip = 25, "여유", "오후 시간대, 비교적 여유롭습니다."
+            male_rate, female_rate, status = 23, 27, "운영중"
         elif 15 <= hour < 16:
-            level, label, tip = 18, "여유", "오후 늦게, 한적하게 이용할 수 있습니다."
-            male_rate, female_rate, status = 16, 20, "운영중"
+            level, label, tip = 22, "여유", "오후 늦게, 한적하게 이용할 수 있습니다."
+            male_rate, female_rate, status = 20, 24, "운영중"
         elif 16 <= hour < 18:
             level, label, tip = 18, "여유", "오후 늦은 시간, 평일 중 가장 여유로운 시간대입니다."
             male_rate, female_rate, status = 16, 20, "운영중"
         elif 18 <= hour <= 20:
-            level, label, tip = 15, "여유", "저녁 시간, 가벼운 운동하기 좋습니다."
-            male_rate, female_rate, status = 14, 16, "운영중"
+            level, label, tip = 12, "여유", "🌙 저녁 시간, 가벼운 운동하기 좋습니다. 방문객이 거의 없어요."
+            male_rate, female_rate, status = 10, 14, "운영중"
         else:
             level, label, tip = 10, "여유", "현재 운영 시간이 아닙니다. (평일 06:00~20:00)"
             male_rate, female_rate, status = 5, 5, "운영종료"
@@ -778,14 +877,21 @@ async def get_congestion():
                     item["label"] = "매우혼잡"
                     item["color"] = "#ef4444"
 
-    # ── Override with historical-based predictions (yesterday/last_week) ──
+    # ── Override with historical-based predictions (priority order) ──
+    # Priority 1: Historical predictions from yesterday/last_week data (3-day expiry)
     _hist_cutoff = (now - timedelta(days=3)).strftime("%Y-%m-%d")
     if _HISTORICAL_PREDICTIONS and _HISTORICAL_DATE and _HISTORICAL_DATE >= _hist_cutoff:
         _apply_levels(forecast, _HISTORICAL_PREDICTIONS)
         _apply_levels(trend, _HISTORICAL_PREDICTIONS)
+    # Priority 2: Chart predictions from today's live data (same-day expiry)
     elif _CHART_PREDICTIONS and _CHART_PREDICTIONS_DATE == now.strftime("%Y-%m-%d"):
         _apply_levels(forecast, _CHART_PREDICTIONS)
         _apply_levels(trend, _CHART_PREDICTIONS)
+    # Priority 3: Default predictions from known historical patterns (always available)
+    # These are pre-populated at startup via _init_default_predictions()
+    elif _HISTORICAL_PREDICTIONS and _HISTORICAL_DATE:
+        _apply_levels(forecast, _HISTORICAL_PREDICTIONS)
+        _apply_levels(trend, _HISTORICAL_PREDICTIONS)
 
     return {
         "current": current,
