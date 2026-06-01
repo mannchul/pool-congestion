@@ -1464,6 +1464,7 @@ HTML_PAGE = """<!DOCTYPE html>
     justify-content: center;
     margin-bottom: 5px;
     position: relative;
+    overflow: hidden;
   }
   .weekly-col .w-bar {
     width: 60%;
@@ -2242,7 +2243,7 @@ function renderWeeklySchedule(schedule) {
 
     requestAnimationFrame(() => {
       const bar = col.querySelector('.w-bar');
-      if (bar) bar.style.height = Math.min(barHeight, col.querySelector('.w-bar-area').offsetHeight - 2) + 'px';
+      if (bar) bar.style.height = barHeight + 'px';
     });
   });
 
