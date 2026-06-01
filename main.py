@@ -305,6 +305,81 @@ def _now_kst() -> datetime:
     return datetime.now(ZoneInfo("Asia/Seoul"))
 
 
+def _weekly_schedule(now: datetime) -> List[Dict]:
+    """Generate a 7-day operation schedule starting from today.
+
+    Returns a list of day dicts with:
+      - date: "M.D" formatted date string
+      - day_name: Korean day name (e.g. "월", "화")
+      - is_today: bool
+      - is_closed: bool
+      - closed_reason: str or None
+      - hours: operating hours string (e.g. "06:00~20:00")
+      - status: "운영" / "휴장" / "단축"
+      - peak_level: estimated peak congestion level (0-100)
+      - peak_label: peak congestion label
+      - peak_color: hex color for peak
+    """
+    DAY_KR = ["월", "화", "수", "목", "금", "토", "일"]
+    schedule = []
+
+    for offset in range(7):
+        day = now + timedelta(days=offset)
+        day = day.replace(hour=12, minute=0, second=0, microsecond=0)  # noon reference
+
+        closed_reason = _is_closed_day(day)
+        weekday = day.weekday()
+
+        # Determine operating hours string
+        if closed_reason:
+            hours_str = "휴장"
+            status = "휴장"
+            peak_level = 0
+            peak_label = "휴장"
+            peak_color = "#8b5cf6"
+        else:
+            if weekday == 6:  # Sunday
+                hours_str = "10:00~17:00"
+                status = "운영"
+            elif weekday == 5:  # Saturday
+                hours_str = "06:00~17:00"
+                status = "운영"
+            else:  # Weekday
+                hours_str = "06:00~20:00"
+                status = "운영"
+
+            # Estimate peak congestion level for this day
+            # Check each operating hour to find peak
+            start_h, end_h = _get_operating_hours(day)
+            peak_level = 0
+            peak_label = "여유"
+            peak_color = "#22c55e"
+            for h in range(start_h, end_h + 1):
+                check = day.replace(hour=h)
+                data = _estimate_congestion(check)
+                if data["status"] == "수질정화시간":
+                    continue
+                if data["level"] > peak_level:
+                    peak_level = data["level"]
+                    peak_label = data["label"]
+                    peak_color = data["color"]
+
+        schedule.append({
+            "date": f"{day.month}.{day.day}",
+            "day_name": DAY_KR[weekday],
+            "is_today": offset == 0,
+            "is_closed": closed_reason is not None,
+            "closed_reason": closed_reason,
+            "hours": hours_str,
+            "status": status,
+            "peak_level": peak_level,
+            "peak_label": peak_label,
+            "peak_color": peak_color,
+        })
+
+    return schedule
+
+
 def _get_operating_hours(now: datetime) -> tuple[int, int]:
     """Return (start_hour, end_hour) for the given day based on operating hours.
 
@@ -433,6 +508,16 @@ async def get_daily_trend():
     now = _now_kst()
     return {
         "trend": _daily_trend(now),
+        "time": now.strftime("%Y-%m-%d %H:%M"),
+    }
+
+
+@app.get("/api/weekly-schedule")
+async def get_weekly_schedule():
+    """Return the 7-day operation schedule as JSON."""
+    now = _now_kst()
+    return {
+        "schedule": _weekly_schedule(now),
         "time": now.strftime("%Y-%m-%d %H:%M"),
     }
 
@@ -1294,6 +1379,118 @@ HTML_PAGE = """<!DOCTYPE html>
     letter-spacing: -0.2px;
   }
 
+  /* ── Weekly schedule ───────────────────────────────────- */
+  .weekly-section { margin: 28px 0; }
+  .weekly-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 8px;
+  }
+  .weekly-item {
+    background: var(--card);
+    border: 1px solid var(--card-border);
+    border-radius: var(--radius-sm);
+    padding: 14px 6px 12px;
+    text-align: center;
+    transition: transform var(--transition), background var(--transition), box-shadow var(--transition);
+    position: relative;
+    overflow: hidden;
+    animation: scale-in 0.5s var(--bounce) both;
+  }
+  .weekly-item::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 2px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    opacity: 0;
+    transition: opacity 0.4s;
+  }
+  .weekly-item:hover {
+    background: var(--card-hover);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+  }
+  .weekly-item:hover::before { opacity: 0.35; }
+  .weekly-item.today {
+    border-color: rgba(56, 189, 248, 0.12);
+    background: rgba(56, 189, 248, 0.04);
+  }
+  .weekly-item.today::before { opacity: 0.5; }
+  .weekly-item.closed-day {
+    opacity: 0.5;
+  }
+  .weekly-item.closed-day .weekly-day { color: #a78bfa; }
+  .weekly-item .weekly-day {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--text-dim);
+    margin-bottom: 6px;
+    letter-spacing: 0.5px;
+  }
+  .weekly-item.today .weekly-day {
+    color: var(--accent);
+    font-size: 0.85rem;
+  }
+  .weekly-item .weekly-date {
+    font-size: 0.62rem;
+    color: rgba(126, 147, 176, 0.5);
+    margin-bottom: 10px;
+    font-weight: 400;
+  }
+  .weekly-item .weekly-bar-wrap {
+    height: 36px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    margin-bottom: 6px;
+  }
+  .weekly-item .weekly-bar {
+    width: 20px;
+    border-radius: 4px 4px 2px 2px;
+    min-height: 2px;
+    transition: height 0.8s var(--bounce);
+    position: relative;
+  }
+  .weekly-item .weekly-bar::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: linear-gradient(to top, transparent 40%, rgba(255,255,255,0.15) 100%);
+    pointer-events: none;
+  }
+  .weekly-item .weekly-hours {
+    font-size: 0.62rem;
+    color: var(--text-dim);
+    font-weight: 500;
+    line-height: 1.2;
+    margin-bottom: 4px;
+  }
+  .weekly-item .weekly-status {
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: -0.2px;
+  }
+  .weekly-item .weekly-status.open { color: #4ade80; }
+  .weekly-item .weekly-status.closed { color: #a78bfa; }
+  .weekly-item .weekly-peak-pct {
+    font-size: 0.65rem;
+    color: rgba(126, 147, 176, 0.5);
+    font-weight: 500;
+  }
+  .weekly-today-tag {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 10px;
+    font-size: 0.58rem;
+    font-weight: 700;
+    background: var(--accent);
+    color: var(--bg-deep);
+    margin-bottom: 6px;
+    letter-spacing: 0.3px;
+  }
+
   /* ── Scroll hint ───────────────────────────────────── */
   .scroll-hint {
     display: none;
@@ -1393,6 +1590,16 @@ HTML_PAGE = """<!DOCTYPE html>
     }
     .container { padding: 14px 14px 36px; }
     header h1 { font-size: 1.4rem; }
+    .weekly-grid { grid-template-columns: repeat(7, 1fr); gap: 6px; }
+    .weekly-item { padding: 10px 4px 8px; }
+    .weekly-item .weekly-day { font-size: 0.68rem; }
+    .weekly-item .weekly-date { font-size: 0.55rem; margin-bottom: 8px; }
+    .weekly-item .weekly-bar { width: 16px; }
+    .weekly-item .weekly-bar-wrap { height: 30px; }
+    .weekly-item .weekly-hours { font-size: 0.55rem; }
+    .weekly-item .weekly-status { font-size: 0.6rem; }
+    .weekly-item .weekly-peak-pct { font-size: 0.55rem; }
+    .weekly-today-tag { font-size: 0.5rem; padding: 1px 7px; }
     header::after { width: 40px; }
     .time-bar {
       padding: 10px 16px;
@@ -1474,6 +1681,16 @@ HTML_PAGE = """<!DOCTYPE html>
 
   @media (max-width: 420px) {
     .info-grid { grid-template-columns: 1fr; }
+    .weekly-grid { grid-template-columns: repeat(7, 1fr); gap: 5px; }
+    .weekly-item { padding: 8px 3px 6px; border-radius: var(--radius-xs); }
+    .weekly-item .weekly-day { font-size: 0.62rem; }
+    .weekly-item .weekly-date { font-size: 0.5rem; margin-bottom: 6px; }
+    .weekly-item .weekly-bar { width: 14px; }
+    .weekly-item .weekly-bar-wrap { height: 26px; }
+    .weekly-item .weekly-hours { font-size: 0.5rem; }
+    .weekly-item .weekly-status { font-size: 0.55rem; }
+    .weekly-item .weekly-peak-pct { font-size: 0.5rem; }
+    .weekly-today-tag { font-size: 0.45rem; padding: 1px 6px; }
     .gender-rates { max-width: 100%; }
     .time-bar { flex-wrap: wrap; justify-content: center; gap: 6px; padding: 10px 12px; }
     .gauge-ring { width: 150px; height: 150px; }
@@ -1491,6 +1708,16 @@ HTML_PAGE = """<!DOCTYPE html>
     .container { padding: 10px 10px 32px; }
     header h1 { font-size: 1.2rem; }
     header p { font-size: 0.75rem; }
+    .weekly-grid { gap: 4px; }
+    .weekly-item { padding: 6px 2px 5px; border-radius: 8px; }
+    .weekly-item .weekly-day { font-size: 0.58rem; }
+    .weekly-item .weekly-date { font-size: 0.45rem; margin-bottom: 5px; }
+    .weekly-item .weekly-bar { width: 12px; }
+    .weekly-item .weekly-bar-wrap { height: 22px; }
+    .weekly-item .weekly-hours { font-size: 0.45rem; }
+    .weekly-item .weekly-status { font-size: 0.5rem; }
+    .weekly-item .weekly-peak-pct { font-size: 0.45rem; }
+    .weekly-today-tag { font-size: 0.4rem; padding: 1px 5px; }
     .time-bar { font-size: 0.85rem; gap: 5px; padding: 8px 10px; }
     #clock-display { font-size: 0.85rem; }
     #date-display { font-size: 0.68rem; }
@@ -1641,6 +1868,16 @@ HTML_PAGE = """<!DOCTYPE html>
           <span class="hours-label">🕐 주말</span>
           <span class="hours-value" id="weekend-hours">--</span>
         </div>
+      </div>
+    </div>
+
+    <!-- Weekly schedule -->
+    <div class="weekly-section animate-in animate-in-delay-4">
+      <div class="section-title">
+        <span>📅</span> 1주일 운영 현황
+      </div>
+      <div class="weekly-grid" id="weekly-grid">
+        <!-- Filled by JS -->
       </div>
     </div>
 
@@ -1960,6 +2197,53 @@ function renderForecast(forecast) {
   });
 
   document.getElementById('forecast-count').textContent = `${forecast.length}시간`;
+}  // ── Weekly schedule renderer ────────────────────────────────────────────────
+function renderWeeklySchedule(schedule) {
+  const grid = document.getElementById('weekly-grid');
+  grid.innerHTML = '';
+
+  schedule.forEach((d, i) => {
+    const div = document.createElement('div');
+    div.className = 'weekly-item';
+    if (d.is_today) div.classList.add('today');
+    if (d.is_closed) div.classList.add('closed-day');
+    div.style.animationDelay = `${i * 0.06}s`;
+
+    const barHeight = d.is_closed ? 2 : Math.max(2, d.peak_level * 0.28 + 2);
+    const statusClass = d.is_closed ? 'closed' : 'open';
+    const statusText = d.is_closed ? '휴장' : d.status;
+    const barColor = d.is_closed ? '#8b5cf6' : d.peak_color;
+
+    div.innerHTML = `
+      ${d.is_today ? '<div class="weekly-today-tag">TODAY</div>' : '<div class="weekly-day">' + d.day_name + '</div>'}
+      ${!d.is_today ? '<div class="weekly-date">' + d.date + '</div>' : ''}
+      ${d.is_today ? '<div class="weekly-date">' + d.date + '</div>' : ''}
+      <div class="weekly-bar-wrap">
+        <div class="weekly-bar" style="height:2px;background:${barColor}"></div>
+      </div>
+      <div class="weekly-hours">${d.hours}</div>
+      <div class="weekly-status ${statusClass}">${statusText}</div>
+      ${!d.is_closed ? '<div class="weekly-peak-pct">최대 ' + d.peak_label + '</div>' : ''}
+    `;
+    grid.appendChild(div);
+
+    requestAnimationFrame(() => {
+      const bar = div.querySelector('.weekly-bar');
+      if (bar) bar.style.height = barHeight + 'px';
+    });
+  });
+}
+
+// ── Fetch weekly schedule ───────────────────────────────────────────────────
+async function fetchWeeklySchedule() {
+  try {
+    const res = await fetch('/api/weekly-schedule');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    renderWeeklySchedule(data.schedule);
+  } catch (err) {
+    console.warn('Weekly schedule fetch failed:', err.message);
+  }
 }
 
 // ── Fetch trend data ─────────────────────────────────────────────────────────
@@ -2108,9 +2392,11 @@ setInterval(updateClock, 1000);
 
 fetchData();
 fetchTrend();
+fetchWeeklySchedule();
 
 setInterval(fetchData, 60000);
 setInterval(fetchTrend, 120000);
+setInterval(fetchWeeklySchedule, 300000); // Refresh weekly schedule every 5 min
 </script>
 </body>
 </html>
