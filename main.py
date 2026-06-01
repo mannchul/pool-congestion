@@ -8,15 +8,8 @@ from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
-import httpx
 import re as _re
-
-# Optional: BeautifulSoup for robust HTML parsing
-try:
-    from bs4 import BeautifulSoup
-    HAS_BS4 = True
-except ImportError:
-    HAS_BS4 = False
+import urllib.request
 
 app = FastAPI(
     title="라온체육센터 수영장 혼잡도",
@@ -108,122 +101,61 @@ _LIVE_HEADERS = {
     ),
     "Accept-Language": "ko-KR,ko;q=0.9,en;q=0.8",
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-    "Accept-Charset": "EUC-KR,utf-8;q=0.7,*;q=0.7",
     "Connection": "keep-alive",
 }
 
 
-def _decode_euckr(raw: bytes) -> str:
-    """Try to decode bytes as EUC-KR, fall back to UTF-8."""
+def _try_fetch_url(url: str, timeout: int = 10) -> bytes | None:
+    """Try to fetch a URL using urllib with proper headers."""
     try:
-        return raw.decode("euc-kr")
-    except (UnicodeDecodeError, LookupError):
-        try:
-            return raw.decode("utf-8")
-        except UnicodeDecodeError:
-            return raw.decode("cp949", errors="replace")
-
-
-def _parse_congestion_with_bs4(html: str) -> Dict | None:
-    """Parse congestion data from HTML using BeautifulSoup.
-
-    Looks for various patterns:
-      - <span>XX%</span> with data attributes
-      - Elements with class bg_spare / bg_general / bg_congestion
-      - Any percentage within relevant container elements
-    """
-    if not HAS_BS4:
+        req = urllib.request.Request(url, headers=_LIVE_HEADERS)
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return resp.read()
+    except Exception:
         return None
 
-    soup = BeautifulSoup(html, "html.parser")
 
-    # Strategy 1: Find the main utilization element
-    # Look for elements with data-util attribute (man/woman indicators)
-    man_elem = soup.find(attrs={"data-util": "man"})
-    woman_elem = soup.find(attrs={"data-util": "woman"})
+def _scrape_live_data() -> Dict | None:
+    """Scrape real-time congestion data from jjss.or.kr.
 
-    male_pct = 0
-    female_pct = 0
-    total_pct = 0
+    Uses urllib for HTTP requests with multiple URL fallbacks.
+    Parses HTML using regex patterns.
+    Handles EUC-KR encoded pages.
 
-    # Find all percentage spans within relevant containers
-    all_percentages = []
+    Returns a dict with 'level', 'male_rate', 'female_rate', 'label',
+    'color', and 'scraped_at', or None if all scraping attempts fail.
+    """
+    global _LIVE_CACHE, _LIVE_CACHE_TIME
 
-    # Look for <span> tags containing percentages
-    for span in soup.find_all("span"):
-        text = span.get_text(strip=True)
-        if text.endswith("%"):
-            try:
-                val = int(text.rstrip("%"))
-                all_percentages.append(val)
-            except ValueError:
-                pass
+    now = datetime.now(ZoneInfo("Asia/Seoul"))
 
-    # Also look in any element with percentage text
-    if not all_percentages:
-        for elem in soup.find_all(string=_re.compile(r"\d+%")):
-            try:
-                val = int(_re.search(r"(\d+)%", elem).group(1))  # type: ignore[union-attr]
-                all_percentages.append(val)
-            except (ValueError, AttributeError):
-                pass
+    # Cache for up to 60 seconds
+    if _LIVE_CACHE is not None and _LIVE_CACHE_TIME is not None:
+        if (now - _LIVE_CACHE_TIME).total_seconds() < 60:
+            return _LIVE_CACHE
 
-    if len(all_percentages) >= 1:
-        total_pct = all_percentages[0]
-        if len(all_percentages) >= 3:
-            male_pct = all_percentages[1]
-            female_pct = all_percentages[2]
-        elif len(all_percentages) >= 2:
-            male_pct = all_percentages[1]
-            female_pct = total_pct // 2
-        else:
-            male_pct = total_pct // 2
-            female_pct = total_pct // 2
+    raw = None
 
-    if total_pct == 0:
+    # Try each URL
+    for url in _LIVE_URLS:
+        result = _try_fetch_url(url)
+        if result is not None and len(result) > 100:
+            raw = result
+            break
+
+    if raw is None:
+        # Cache the failure briefly to avoid hammering the site
+        _LIVE_CACHE = None
+        _LIVE_CACHE_TIME = now
         return None
 
-    # Determine label from class names
-    status_label = "여유"
-    if soup.find(class_=_re.compile(r"bg_congestion", _re.I)):
-        status_label = "혼잡"
-    elif soup.find(class_=_re.compile(r"bg_general", _re.I)):
-        status_label = "보통"
-    elif soup.find(class_=_re.compile(r"bg_spare", _re.I)):
-        status_label = "여유"
-
-    # Colour mapping
-    if total_pct < 30:
-        color = "#22c55e"
-    elif total_pct < 50:
-        color = "#eab308"
-    elif total_pct < 70:
-        color = "#f97316"
-    else:
-        color = "#ef4444"
-
-    return {
-        "level": total_pct,
-        "label": status_label,
-        "color": color,
-        "male_rate": male_pct,
-        "female_rate": female_pct,
-    }
-
-
-def _parse_congestion_regex(raw: bytes) -> Dict | None:
-    """Parse congestion data from raw bytes using regex (fallback).
-
-    The page HTML (EUC-KR) contains patterns like:
-      <span>23%</span>   (total utilization)
-      data-util="man" ... <span>11%</span>   (male)
-      data-util="woman" ... <span>30%</span> (female)
-      class="... bg_spare" = 여유, bg_general = 보통, bg_congestion = 혼잡
-    """
+    # Parse with regex on raw bytes
     # Find all percentage patterns: >XX%< in the entire page
     percentages = _re.findall(rb">(\d+)%<", raw)
 
     if len(percentages) < 1:
+        _LIVE_CACHE = None
+        _LIVE_CACHE_TIME = now
         return None
 
     total_pct = int(percentages[0])
@@ -233,6 +165,7 @@ def _parse_congestion_regex(raw: bytes) -> Dict | None:
     female_pct = int(percentages[2]) if len(percentages) > 2 else total_pct // 2
 
     # Determine label from class name (search the whole page)
+    # bg_spare = 여유, bg_general = 보통, bg_congestion = 혼잡
     status_label = "여유"
     if _re.search(rb"bg_congestion", raw):
         status_label = "혼잡"
@@ -251,83 +184,18 @@ def _parse_congestion_regex(raw: bytes) -> Dict | None:
     else:
         color = "#ef4444"
 
-    return {
+    result = {
         "level": total_pct,
         "label": status_label,
         "color": color,
         "male_rate": male_pct,
         "female_rate": female_pct,
+        "scraped_at": now,
     }
 
-
-def _try_fetch_url(client: httpx.Client, url: str) -> bytes | None:
-    """Try to fetch a URL with proper headers and timeout."""
-    try:
-        resp = client.get(
-            url,
-            headers=_LIVE_HEADERS,
-            timeout=10.0,
-            follow_redirects=True,
-        )
-        resp.raise_for_status()
-        return resp.content
-    except Exception:
-        return None
-
-
-def _scrape_live_data() -> Dict | None:
-    """Scrape real-time congestion data from jjss.or.kr.
-
-    Uses httpx for HTTP requests with multiple URL fallbacks.
-    Parses HTML using BeautifulSoup (preferred) or regex (fallback).
-    Handles EUC-KR encoded pages.
-
-    Returns a dict with 'level', 'male_rate', 'female_rate', 'label',
-    'color', and 'scraped_at', or None if all scraping attempts fail.
-    """
-    global _LIVE_CACHE, _LIVE_CACHE_TIME
-
-    now = datetime.now(ZoneInfo("Asia/Seoul"))
-
-    # Cache for up to 60 seconds
-    if _LIVE_CACHE is not None and _LIVE_CACHE_TIME is not None:
-        if (now - _LIVE_CACHE_TIME).total_seconds() < 60:
-            return _LIVE_CACHE
-
-    raw = None
-
-    # verify=False: some Korean gov't sites use self-signed certs
-    with httpx.Client(verify=False) as client:
-        # Try each URL
-        for url in _LIVE_URLS:
-            result = _try_fetch_url(client, url)
-            if result is not None and len(result) > 100:
-                raw = result
-                break
-
-    if raw is None:
-        _LIVE_CACHE = None
-        _LIVE_CACHE_TIME = now
-        return None
-
-    # Try BeautifulSoup parsing first (from decoded HTML)
-    html = _decode_euckr(raw)
-    parsed = _parse_congestion_with_bs4(html) if HAS_BS4 else None
-
-    # Fall back to regex parsing on raw bytes
-    if parsed is None:
-        parsed = _parse_congestion_regex(raw)
-
-    if parsed is None:
-        _LIVE_CACHE = None
-        _LIVE_CACHE_TIME = now
-        return None
-
-    parsed["scraped_at"] = now
-
-    _LIVE_CACHE = parsed
+    _LIVE_CACHE = result
     _LIVE_CACHE_TIME = now
-    return parsed
+    return result
 
 
 # ── Congestion estimation logic ─────────────────────────────────────────────
