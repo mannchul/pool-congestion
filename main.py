@@ -22,7 +22,7 @@ POOL_INFO = {
     "name": "전주 라온체육센터 수영장",
     "address": "전북 전주시 덕진구 오공로 43-6",
     "phone": "063-239-2760",
-    "weekday_hours": "06:00 ~ 20:00 (브레이크타임 12:00~13:00)",
+    "weekday_hours": "06:00 ~ 20:00 (수질정화시간 12:00~13:00)",
     "saturday_hours": "06:00 ~ 17:00",
     "sunday_holiday_hours": "10:00 ~ 17:00",
     "weekend_hours": "토요일 06:00~17:00 / 일요일·공휴일 10:00~17:00",
@@ -146,7 +146,7 @@ def _estimate_congestion(now: datetime) -> Dict:
       - is_weekend: bool
       - male_rate: estimated male usage rate (%)
       - female_rate: estimated female usage rate (%)
-      - status: "운영중" / "브레이크타임" / "운영종료"
+      - status: "운영중" / "수질정화시간" / "운영종료"
     """
     hour = now.hour + now.minute / 60
     weekday = now.weekday()  # 0=Mon … 6=Sun
@@ -205,8 +205,8 @@ def _estimate_congestion(now: datetime) -> Dict:
             level, label, tip = 40, "여유", "점심 전, 아직은 여유로운 편입니다."
             male_rate, female_rate, status = 35, 45, "운영중"
         elif 12 <= hour < 13:
-            level, label, tip = 0, "브레이크타임", "⚠️ 브레이크타임(12:00~13:00)입니다. 시설 정비 시간이니 참고하세요."
-            male_rate, female_rate, status = 0, 0, "브레이크타임"
+            level, label, tip = 0, "수질정화시간", "⚠️ 수질정화시간(12:00~13:00)입니다. 시설 정비 시간이니 참고하세요."
+            male_rate, female_rate, status = 0, 0, "수질정화시간"
         elif 13 <= hour < 15:
             level, label, tip = 35, "여유", "오후 시간대는 비교적 여유롭습니다."
             male_rate, female_rate, status = 30, 40, "운영중"
@@ -277,7 +277,7 @@ def _hourly_forecast(now: datetime) -> List[Dict]:
             continue
         # Exclude break time label from forecast
         data = _estimate_congestion(t)
-        if data["status"] == "브레이크타임":
+        if data["status"] == "수질정화시간":
             continue
         forecasts.append({
             "hour": t.strftime("%H:%M"),
@@ -1676,7 +1676,7 @@ function setStatusBadge(status) {
   badge.className = 'gauge-status-badge';
   if (status === '운영중') {
     badge.classList.add('open');
-  } else if (status === '브레이크타임') {
+  } else if (status === '수질정화시간') {
     badge.classList.add('break');
   } else {
     badge.classList.add('closed');

@@ -37,9 +37,9 @@ class TestWeekday:
             (11, 0, 40, "여유"),  # 11:00~12:00
             (11, 30, 40, "여유"),
             (11, 59, 40, "여유"),
-            (12, 0, 0, "브레이크타임"),  # break
-            (12, 30, 0, "브레이크타임"),
-            (12, 59, 0, "브레이크타임"),
+            (12, 0, 0, "수질정화시간"),  # break
+            (12, 30, 0, "수질정화시간"),
+            (12, 59, 0, "수질정화시간"),
             (13, 0, 35, "여유"),  # 13:00~15:00
             (14, 0, 35, "여유"),
             (14, 59, 35, "여유"),
@@ -201,12 +201,12 @@ class TestNewFields:
     def test_status_present(self):
         r = _estimate_congestion(_dt(2026, 5, 25, 10, 0))
         assert "status" in r
-        assert r["status"] in ("운영중", "브레이크타임", "운영종료")
+        assert r["status"] in ("운영중", "수질정화시간", "운영종료")
 
     @pytest.mark.parametrize(
         "dt_args, expected_status",
         [
-            ((2026, 5, 25, 12, 30), "브레이크타임"),  # weekday break
+            ((2026, 5, 25, 12, 30), "수질정화시간"),  # weekday break
             ((2026, 5, 25, 10, 0), "운영중"),  # weekday open
             ((2026, 5, 25, 21, 0), "운영종료"),  # weekday closed
             ((2026, 5, 30, 12, 0), "운영중"),  # sat open
