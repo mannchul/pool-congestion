@@ -83,6 +83,10 @@ _CHART_DATA: dict = {}  # {hour: user_count}
 _CHART_PREDICTIONS: dict = {}  # {hour: level}
 _CHART_PREDICTIONS_DATE: str | None = None  # "YYYY-MM-DD" of cached predictions
 
+# Historical chart data predictions (from yesterday + last_week history page)
+_HISTORICAL_PREDICTIONS: dict = {}  # {hour: level} - improved predictions using history
+_HISTORICAL_DATE: str | None = None  # "YYYY-MM-DD" when predictions were built
+
 # Multiple URL patterns for the real-time congestion page
 _LIVE_URLS = [
     # Primary URL
@@ -98,6 +102,13 @@ _LIVE_URLS = [
         "&searchType=PL004"
     ),
 ]
+
+# History page URL (includes yesterday/lastWeek comparative data)
+_HISTORY_URL = (
+    "https://www.jjss.or.kr/reserv/index.9is"
+    "?contentUid=5232d76d8f95414801904883b431549b"
+    "&searchType=PL004&yesterday=yesterday&lastWeek=lastWeek&subPath="
+)
 
 _LIVE_HEADERS = {
     "User-Agent": (
@@ -228,6 +239,18 @@ def _scrape_live_data() -> Dict | None:
             _CHART_PREDICTIONS.update(predictions)
             _CHART_PREDICTIONS_DATE = now.strftime("%Y-%m-%d")
 
+    # ── Fetch history page (yesterday + last_week) ──
+    hist_raw = _try_fetch_url(_HISTORY_URL)
+    if hist_raw and len(hist_raw) > 100:
+        hist_data = _extract_historical_data(hist_raw)
+        if hist_data:
+            # Build improved predictions using historical patterns
+            hist_predictions = _build_historical_predictions(hist_data, now)
+            if hist_predictions:
+                _HISTORICAL_PREDICTIONS.clear()
+                _HISTORICAL_PREDICTIONS.update(hist_predictions)
+                _HISTORICAL_DATE = now.strftime("%Y-%m-%d")
+
     return result
 
 
@@ -248,6 +271,32 @@ def _extract_chart_data(raw: bytes) -> dict | None:
     result = {}
     for h, u in matches:
         result[int(h)] = int(u)
+    return result if result else None
+
+
+def _extract_historical_data(raw: bytes) -> dict | None:
+    """Extract yesterday and last_week hourly data from history page HTML.
+
+    The history page has a 4-column chart format:
+    ['06시', today_val, yesterday_val, last_week_val, style_val]
+
+    Returns {hour: {today, yesterday, last_week}} or None.
+    """
+    idx = raw.find(b"arrayToDataTable")
+    if idx < 0:
+        return None
+    chunk = raw[idx:idx+2500]
+    # Match 4-column pattern: '06시', today, yesterday, last_week
+    matches = _re.findall(rb"'(\d+)[^']*',\s*(\d+),\s*(\d+),\s*(\d+)", chunk)
+    if len(matches) < 3:
+        return None
+    result = {}
+    for h, today, yesterday, last_week in matches:
+        result[int(h)] = {
+            "today": int(today),
+            "yesterday": int(yesterday),
+            "last_week": int(last_week),
+        }
     return result if result else None
 
 
@@ -284,6 +333,71 @@ def _chart_to_levels(chart_data: dict, now: datetime) -> dict | None:
         est = max(0, min(est, 95))  # Clamp 0-95
         levels[hour] = est
     return levels
+
+
+def _build_historical_predictions(hist_data: dict, now: datetime) -> dict | None:
+    """Build congestion predictions using historical (last_week) data.
+
+    Uses the 'last_week' column (same day of week) as the primary
+    pattern source, calibrated against today's observed utilization.
+    Falls back to 'yesterday' data if last_week is unavailable.
+
+    Returns {hour: level} or None.
+    """
+    current_hour = now.hour
+
+    # Primary: use last_week (same weekday) data
+    last_week_current = hist_data.get(current_hour, {}).get("last_week", 0)
+    yesterday_current = hist_data.get(current_hour, {}).get("yesterday", 0)
+    today_current = hist_data.get(current_hour, {}).get("today", 0)
+
+    # Determine which data column to use as the pattern
+    pattern_source = None
+    pattern_key = None
+
+    if last_week_current > 0:
+        pattern_source = last_week_current
+        pattern_key = "last_week"
+    elif yesterday_current > 0:
+        pattern_source = yesterday_current
+        pattern_key = "yesterday"
+    elif today_current > 0:
+        pattern_source = today_current
+        pattern_key = "today"
+    else:
+        # Try previous hours as fallback
+        for h in range(current_hour - 1, 5, -1):
+            for col in ["last_week", "yesterday", "today"]:
+                val = hist_data.get(h, {}).get(col, 0)
+                if val > 0:
+                    pattern_source = val
+                    pattern_key = col
+                    break
+            if pattern_source:
+                break
+
+    if not pattern_source:
+        return None
+
+    # Get current utilization from live cache
+    if not (_LIVE_CACHE and _LIVE_CACHE.get("level") is not None):
+        return None
+
+    current_level = _LIVE_CACHE["level"]
+
+    # Calibration factor
+    factor = current_level / pattern_source
+
+    levels = {}
+    for hour, data in hist_data.items():
+        val = data.get(pattern_key, 0)
+        if val == 0:
+            continue
+        est = round(val * factor)
+        est = max(0, min(est, 95))
+        levels[hour] = est
+
+    return levels if levels else None
 
 
 # ── Congestion estimation logic ─────────────────────────────────────────────
@@ -614,30 +728,34 @@ async def get_congestion():
     forecast = _hourly_forecast(now)
     trend = _daily_trend(now)
 
-    # ── Override forecast/trend with chart-based predictions when available ──
-    def _apply_chart_level(item: dict) -> None:
-        h = int(item["hour"].split(":")[0])
-        chart_level = _CHART_PREDICTIONS.get(h)
-        if chart_level is not None:
-            item["level"] = chart_level
-            if chart_level < 30:
-                item["label"] = "여유"
-                item["color"] = "#22c55e"
-            elif chart_level < 50:
-                item["label"] = "보통"
-                item["color"] = "#eab308"
-            elif chart_level < 70:
-                item["label"] = "혼잡"
-                item["color"] = "#f97316"
-            else:
-                item["label"] = "매우혼잡"
-                item["color"] = "#ef4444"
+    # ── Helper: apply predictions dict to override forecast/trend items ──
+    def _apply_levels(items: list, predictions: dict) -> None:
+        for item in items:
+            h = int(item["hour"].split(":")[0])
+            level = predictions.get(h)
+            if level is not None:
+                item["level"] = level
+                if level < 30:
+                    item["label"] = "여유"
+                    item["color"] = "#22c55e"
+                elif level < 50:
+                    item["label"] = "보통"
+                    item["color"] = "#eab308"
+                elif level < 70:
+                    item["label"] = "혼잡"
+                    item["color"] = "#f97316"
+                else:
+                    item["label"] = "매우혼잡"
+                    item["color"] = "#ef4444"
 
-    if _CHART_PREDICTIONS and _CHART_PREDICTIONS_DATE == now.strftime("%Y-%m-%d"):
-        for item in forecast:
-            _apply_chart_level(item)
-        for item in trend:
-            _apply_chart_level(item)
+    # ── Override with historical-based predictions (yesterday/last_week) ──
+    _hist_cutoff = (now - timedelta(days=3)).strftime("%Y-%m-%d")
+    if _HISTORICAL_PREDICTIONS and _HISTORICAL_DATE and _HISTORICAL_DATE >= _hist_cutoff:
+        _apply_levels(forecast, _HISTORICAL_PREDICTIONS)
+        _apply_levels(trend, _HISTORICAL_PREDICTIONS)
+    elif _CHART_PREDICTIONS and _CHART_PREDICTIONS_DATE == now.strftime("%Y-%m-%d"):
+        _apply_levels(forecast, _CHART_PREDICTIONS)
+        _apply_levels(trend, _CHART_PREDICTIONS)
 
     return {
         "current": current,
