@@ -78,6 +78,11 @@ def _is_closed_day(now: datetime) -> str | None:
 _LIVE_CACHE: Dict | None = None
 _LIVE_CACHE_TIME: datetime | None = None
 
+# Google Chart hourly usage data cache (extracted from jjss.or.kr page)
+_CHART_DATA: dict = {}  # {hour: user_count}
+_CHART_PREDICTIONS: dict = {}  # {hour: level}
+_CHART_PREDICTIONS_DATE: str | None = None  # "YYYY-MM-DD" of cached predictions
+
 # Multiple URL patterns for the real-time congestion page
 _LIVE_URLS = [
     # Primary URL
@@ -209,7 +214,76 @@ def _scrape_live_data() -> Dict | None:
 
     _LIVE_CACHE = result
     _LIVE_CACHE_TIME = now
+
+    # ── Extract Google Chart hourly usage data ──
+    chart_data = _extract_chart_data(raw)
+    if chart_data:
+        _CHART_DATA.clear()
+        _CHART_DATA.update(chart_data)
+
+        # Generate hourly congestion predictions from chart data
+        predictions = _chart_to_levels(chart_data, now)
+        if predictions:
+            _CHART_PREDICTIONS.clear()
+            _CHART_PREDICTIONS.update(predictions)
+            _CHART_PREDICTIONS_DATE = now.strftime("%Y-%m-%d")
+
     return result
+
+
+def _extract_chart_data(raw: bytes) -> dict | None:
+    """Extract Google Chart hourly user count data from the raw HTML.
+
+    Parses the Google Visualization chart data embedded in the page.
+    Returns a dict of {hour: user_count} or None if parsing fails.
+    """
+    idx = raw.find(b"arrayToDataTable")
+    if idx < 0:
+        return None
+    chunk = raw[idx:idx+2000]
+    # Match patterns like: '06...', 88 (hour digits + user count)
+    matches = _re.findall(rb"'(\d+)[^']*',\s*(\d+)", chunk)
+    if len(matches) < 3:
+        return None
+    result = {}
+    for h, u in matches:
+        result[int(h)] = int(u)
+    return result if result else None
+
+
+def _chart_to_levels(chart_data: dict, now: datetime) -> dict | None:
+    """Convert hourly user counts to estimated congestion levels.
+
+    Uses a calibration factor derived from the current hour's
+    chart value vs actual observed utilization.
+    Returns {hour: level} or None.
+    """
+    current_hour = now.hour
+    chart_current = chart_data.get(current_hour)
+    if not chart_current or chart_current == 0:
+        # Try previous hour as fallback
+        for h in range(current_hour - 1, 5, -1):
+            if chart_data.get(h, 0) > 0:
+                chart_current = chart_data[h]
+                break
+    if not chart_current or chart_current == 0:
+        return None
+
+    # Get current actual utilization from live cache
+    if _LIVE_CACHE and _LIVE_CACHE.get("level") is not None:
+        current_level = _LIVE_CACHE["level"]
+    else:
+        return None
+
+    # Calibration factor: current_level / chart_current
+    factor = current_level / chart_current
+
+    levels = {}
+    for hour, users in chart_data.items():
+        est = round(users * factor)
+        est = max(0, min(est, 95))  # Clamp 0-95
+        levels[hour] = est
+    return levels
 
 
 # ── Congestion estimation logic ─────────────────────────────────────────────
@@ -289,31 +363,40 @@ def _estimate_congestion(now: datetime) -> Dict:
 
     else:
         # ── Weekday ──
+        # Based on analysis of actual jjss.or.kr chart data:
+        # Morning has the most users (06~08시 peak), then steadily drops
+        # Afternoon is consistently quiet (10~20% range)
         day_type = "평일"
         if 6 <= hour < 8:
-            level, label, tip = 30, "여유", "아침 수영하기 좋은 시간입니다. 한적하게 운동하세요!"
-            male_rate, female_rate, status = 35, 25, "운영중"
-        elif 8 <= hour < 11:
-            level, label, tip = 20, "여유", "오전 중 가장 한적한 시간대입니다."
-            male_rate, female_rate, status = 15, 25, "운영중"
+            level, label, tip = 35, "여유", "아침 시간대, 비교적 한적하게 수영할 수 있습니다."
+            male_rate, female_rate, status = 35, 35, "운영중"
+        elif 8 <= hour < 10:
+            level, label, tip = 25, "여유", "오전 시간, 방문객이 점차 줄어듭니다."
+            male_rate, female_rate, status = 25, 25, "운영중"
+        elif 10 <= hour < 11:
+            level, label, tip = 15, "여유", "오전 늦게, 한적한 시간대입니다."
+            male_rate, female_rate, status = 15, 15, "운영중"
         elif 11 <= hour < 12:
-            level, label, tip = 40, "여유", "점심 전, 아직은 여유로운 편입니다."
-            male_rate, female_rate, status = 35, 45, "운영중"
+            level, label, tip = 12, "여유", "점심 전 가장 한적한 시간입니다."
+            male_rate, female_rate, status = 10, 14, "운영중"
         elif 12 <= hour < 13:
             level, label, tip = 0, "수질정화시간", "⚠️ 수질정화시간(12:00~13:00)입니다. 시설 정비 시간이니 참고하세요."
             male_rate, female_rate, status = 0, 0, "수질정화시간"
-        elif 13 <= hour < 15:
-            level, label, tip = 35, "여유", "오후 시간대는 비교적 여유롭습니다."
-            male_rate, female_rate, status = 30, 40, "운영중"
+        elif 13 <= hour < 14:
+            level, label, tip = 30, "여유", "점심 이후, 방문객이 다시 증가합니다."
+            male_rate, female_rate, status = 30, 30, "운영중"
+        elif 14 <= hour < 15:
+            level, label, tip = 22, "여유", "오후 시간대, 비교적 여유롭습니다."
+            male_rate, female_rate, status = 20, 24, "운영중"
         elif 15 <= hour < 16:
-            level, label, tip = 25, "여유", "오후 늦게, 가장 한적한 시간 중 하나입니다."
-            male_rate, female_rate, status = 20, 30, "운영중"
+            level, label, tip = 18, "여유", "오후 늦게, 한적하게 이용할 수 있습니다."
+            male_rate, female_rate, status = 16, 20, "운영중"
         elif 16 <= hour < 18:
-            level, label, tip = 60, "보통", "퇴근 시간대 방문객이 증가합니다."
-            male_rate, female_rate, status = 65, 55, "운영중"
+            level, label, tip = 18, "여유", "오후 늦은 시간, 평일 중 가장 여유로운 시간대입니다."
+            male_rate, female_rate, status = 16, 20, "운영중"
         elif 18 <= hour <= 20:
-            level, label, tip = 80, "혼잡", "저녁 피크 시간입니다. 2시간 정도 여유를 두고 방문하세요."
-            male_rate, female_rate, status = 85, 75, "운영중"
+            level, label, tip = 15, "여유", "저녁 시간, 가벼운 운동하기 좋습니다."
+            male_rate, female_rate, status = 14, 16, "운영중"
         else:
             level, label, tip = 10, "여유", "현재 운영 시간이 아닙니다. (평일 06:00~20:00)"
             male_rate, female_rate, status = 5, 5, "운영종료"
@@ -530,6 +613,32 @@ async def get_congestion():
 
     forecast = _hourly_forecast(now)
     trend = _daily_trend(now)
+
+    # ── Override forecast/trend with chart-based predictions when available ──
+    def _apply_chart_level(item: dict) -> None:
+        h = int(item["hour"].split(":")[0])
+        chart_level = _CHART_PREDICTIONS.get(h)
+        if chart_level is not None:
+            item["level"] = chart_level
+            if chart_level < 30:
+                item["label"] = "여유"
+                item["color"] = "#22c55e"
+            elif chart_level < 50:
+                item["label"] = "보통"
+                item["color"] = "#eab308"
+            elif chart_level < 70:
+                item["label"] = "혼잡"
+                item["color"] = "#f97316"
+            else:
+                item["label"] = "매우혼잡"
+                item["color"] = "#ef4444"
+
+    if _CHART_PREDICTIONS and _CHART_PREDICTIONS_DATE == now.strftime("%Y-%m-%d"):
+        for item in forecast:
+            _apply_chart_level(item)
+        for item in trend:
+            _apply_chart_level(item)
+
     return {
         "current": current,
         "forecast": forecast,
