@@ -414,6 +414,14 @@ HTML_PAGE = """<!DOCTYPE html>
 
   html { scroll-behavior: smooth; }
 
+  /* Safe area for notched phones */
+  @supports(padding:max(0px)) {
+    .container { padding-left: max(20px, env(safe-area-inset-left)); padding-right: max(20px, env(safe-area-inset-right)); }
+  }
+
+  /* Prevent overscroll on forecast horizontal scroll */
+  .forecast-grid { overscroll-behavior: contain; }
+
   body {
     font-family: 'Noto Sans KR', -apple-system, BlinkMacSystemFont, sans-serif;
     background: var(--bg-deep);
@@ -1221,7 +1229,17 @@ HTML_PAGE = """<!DOCTYPE html>
   }
 
   /* ── Responsive ───────────────────────────────────────── */
+  @media (hover: none) and (pointer: coarse) {
+    .forecast-item, .info-item, .retry-btn { cursor: default; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+    .forecast-item:active { transform: scale(0.96) !important; transition: transform 0.15s !important; }
+    .info-item:active { transform: scale(0.98) !important; }
+    .retry-btn:active { transform: scale(0.97) !important; }
+  }
+
   @media (max-width: 640px) {
+    @supports(padding:max(0px)) {
+      .container { padding: 14px max(14px, env(safe-area-inset-left)) 36px max(14px, env(safe-area-inset-right)); }
+    }
     .container { padding: 14px 14px 36px; }
     header h1 { font-size: 1.4rem; }
     header::after { width: 40px; }
@@ -1235,14 +1253,16 @@ HTML_PAGE = """<!DOCTYPE html>
     #clock-display { font-size: 1rem; }
     #date-display { font-size: 0.75rem; }
     .gauge-card { padding: 28px 18px 24px; }
-    .gauge-ring { width: 160px; height: 160px; }
-    .gauge-label .pct { font-size: 2.4rem; }
+    .gauge-ring { width: 170px; height: 170px; }
+    .gauge-ring svg { width: 170px; height: 170px; }
+    .gauge-label .pct { font-size: 2.5rem; }
     .gauge-label .pct-label { font-size: 0.9rem; }
     .gauge-status-badge {
       top: 12px;
       right: 14px;
-      padding: 4px 12px;
-      font-size: 0.68rem;
+      padding: 6px 14px;
+      font-size: 0.7rem;
+      min-height: 36px;
     }
     .source-badge {
       bottom: 12px;
@@ -1250,9 +1270,11 @@ HTML_PAGE = """<!DOCTYPE html>
       font-size: 0.58rem;
     }
     .info-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
-    .info-item { padding: 14px 16px; }
-    .info-item .value { font-size: 0.85rem; }
-    .gender-rates { padding: 14px 16px; }
+    .info-item { padding: 16px 18px; min-height: 60px; }
+    .info-item .value { font-size: 0.88rem; }
+    .gender-rates { padding: 16px 18px; gap: 14px; }
+    .gender-bar-track { height: 14px; }
+    .gender-row { gap: 10px; min-height: 40px; }
     .section-title { font-size: 0.95rem; }
 
     /* Forecast: horizontal scroll on mobile */
@@ -1262,19 +1284,24 @@ HTML_PAGE = """<!DOCTYPE html>
       overflow-x: auto;
       scroll-snap-type: x mandatory;
       -webkit-overflow-scrolling: touch;
-      gap: 8px;
+      gap: 10px;
       padding: 4px 14px 12px;
+      scrollbar-width: thin;
     }
-    .forecast-scroll-wrap .forecast-grid::-webkit-scrollbar { height: 3px; }
+    .forecast-scroll-wrap .forecast-grid::-webkit-scrollbar { height: 4px; }
     .forecast-scroll-wrap .forecast-grid::-webkit-scrollbar-track { background: transparent; }
     .forecast-scroll-wrap .forecast-grid::-webkit-scrollbar-thumb {
-      background: rgba(56, 189, 248, 0.1);
+      background: rgba(56, 189, 248, 0.15);
       border-radius: 4px;
     }
     .forecast-scroll-wrap .forecast-item {
       scroll-snap-align: start;
-      min-width: 76px;
-      padding: 10px 4px 10px;
+      min-width: 80px;
+      padding: 12px 6px 12px;
+      min-height: 100px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
     }
     .forecast-scroll-wrap .forecast-item:last-child { scroll-snap-align: end; }
     @media (hover: hover) {
@@ -1284,16 +1311,64 @@ HTML_PAGE = """<!DOCTYPE html>
     }
     .scroll-hint { display: block; }
 
-    .forecast-item .bar { width: 18px; }
-    .forecast-item .bar-wrap { height: 44px; }
-    .forecast-item .hour { font-size: 0.7rem; }
-    .forecast-item .f-label { font-size: 0.68rem; }
+    .forecast-item .bar { width: 20px; }
+    .forecast-item .bar-wrap { height: 48px; }
+    .forecast-item .hour { font-size: 0.72rem; }
+    .forecast-item .f-label { font-size: 0.7rem; }
+    .forecast-item .bar::before {
+      top: -3px; left: -4px;
+      right: -4px; height: 8px;
+    }
   }
 
   @media (max-width: 420px) {
     .info-grid { grid-template-columns: 1fr; }
     .gender-rates { max-width: 100%; }
-    .time-bar { flex-wrap: wrap; justify-content: center; }
+    .time-bar { flex-wrap: wrap; justify-content: center; gap: 6px; padding: 10px 12px; }
+    .gauge-ring { width: 150px; height: 150px; }
+    .gauge-ring svg { width: 150px; height: 150px; }
+    .gauge-label .pct { font-size: 2.2rem; }
+    .gauge-label .pct-label { font-size: 0.85rem; }
+    .gauge-tip { font-size: 0.82rem; padding: 14px 16px; }
+    footer { font-size: 0.72rem; }
+  }
+
+  @media (max-width: 360px) {
+    @supports(padding:max(0px)) {
+      .container { padding: 10px max(10px, env(safe-area-inset-left)) 32px max(10px, env(safe-area-inset-right)); }
+    }
+    .container { padding: 10px 10px 32px; }
+    header h1 { font-size: 1.2rem; }
+    header p { font-size: 0.75rem; }
+    .time-bar { font-size: 0.85rem; gap: 5px; padding: 8px 10px; }
+    #clock-display { font-size: 0.85rem; }
+    #date-display { font-size: 0.68rem; }
+    .gauge-card { padding: 22px 14px 20px; }
+    .gauge-ring { width: 130px; height: 130px; }
+    .gauge-ring svg { width: 130px; height: 130px; }
+    .gauge-label .pct { font-size: 2rem; }
+    .gauge-label .pct-label { font-size: 0.8rem; }
+    .gauge-status-badge { top: 10px; right: 10px; padding: 4px 10px; font-size: 0.65rem; min-height: 30px; }
+    .source-badge { bottom: 8px; left: 12px; font-size: 0.55rem; padding: 3px 8px; }
+    .info-item { padding: 12px 14px; min-height: 50px; }
+    .info-item .value { font-size: 0.82rem; }
+    .info-item .label { font-size: 0.63rem; }
+    .gender-rates { padding: 12px 14px; gap: 10px; }
+    .gender-bar-track { height: 12px; }
+    .gender-row { gap: 8px; min-height: 34px; }
+    .gender-icon { font-size: 0.9rem; }
+    .gender-label { font-size: 0.7rem; width: 34px; }
+    .gender-value { font-size: 0.75rem; width: 36px; }
+    .section-title { font-size: 0.85rem; }
+    .forecast-item { min-width: 68px; padding: 8px 4px 10px; min-height: 88px; }
+    .forecast-item .hour { font-size: 0.65rem; }
+    .forecast-item .bar { width: 16px; }
+    .forecast-item .bar-wrap { height: 40px; }
+    .forecast-item .f-label { font-size: 0.62rem; }
+    .trend-card { padding: 14px 10px 8px; }
+    .error-state .retry-btn { padding: 10px 24px; font-size: 0.82rem; }
+    .loading { padding: 60px 14px; }
+    .loading .spinner { width: 36px; height: 36px; }
   }
 </style>
 </head>
