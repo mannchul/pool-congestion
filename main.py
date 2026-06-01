@@ -8,8 +8,15 @@ from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
-import urllib.request
+import httpx
 import re as _re
+
+# Optional: BeautifulSoup for robust HTML parsing
+try:
+    from bs4 import BeautifulSoup
+    HAS_BS4 = True
+except ImportError:
+    HAS_BS4 = False
 
 app = FastAPI(
     title="라온체육센터 수영장 혼잡도",
@@ -77,74 +84,112 @@ def _is_closed_day(now: datetime) -> str | None:
 _LIVE_CACHE: Dict | None = None
 _LIVE_CACHE_TIME: datetime | None = None
 
-
-def _scrape_live_data() -> Dict | None:
-    """Scrape real-time congestion data from jjss.or.kr.
-
-    The page HTML (EUC-KR) contains patterns like:
-      <span>23%</span>   (total utilization)
-      data-util="man" ... <span>11%</span>   (male)
-      data-util="woman" ... <span>30%</span> (female)
-      class="... bg_spare" = 여유, bg_general = 보통, bg_congestion = 혼잡
-
-    Returns a dict with 'level', 'male_rate', 'female_rate', 'label'
-    and 'scraped_at', or None if scraping fails.
-    """
-    global _LIVE_CACHE, _LIVE_CACHE_TIME
-
-    now = datetime.now(ZoneInfo("Asia/Seoul"))
-
-    # Cache for up to 60 seconds
-    if _LIVE_CACHE is not None and _LIVE_CACHE_TIME is not None:
-        if (now - _LIVE_CACHE_TIME).total_seconds() < 60:
-            return _LIVE_CACHE
-
-    url = (
+# Multiple URL patterns for the real-time congestion page
+_LIVE_URLS = [
+    # Primary URL
+    (
         "https://www.jjss.or.kr/reserv/index.9is"
         "?contentUid=5232d76d8f95414801904883b431549b"
         "&searchType=PL004&subPath="
-    )
-    headers = {
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/120.0.0.0 Safari/537.36"
-        ),
-        "Accept-Language": "ko-KR,ko;q=0.9,en;q=0.8",
-    }
+    ),
+    # Alternative URL (without subPath)
+    (
+        "https://www.jjss.or.kr/reserv/index.9is"
+        "?contentUid=5232d76d8f95414801904883b431549b"
+        "&searchType=PL004"
+    ),
+]
 
+_LIVE_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/120.0.0.0 Safari/537.36"
+    ),
+    "Accept-Language": "ko-KR,ko;q=0.9,en;q=0.8",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Charset": "EUC-KR,utf-8;q=0.7,*;q=0.7",
+    "Connection": "keep-alive",
+}
+
+
+def _decode_euckr(raw: bytes) -> str:
+    """Try to decode bytes as EUC-KR, fall back to UTF-8."""
     try:
-        req = urllib.request.Request(url, headers=headers)
-        resp = urllib.request.urlopen(req, timeout=8)
-        raw = resp.read()
-    except Exception:
-        _LIVE_CACHE = None
+        return raw.decode("euc-kr")
+    except (UnicodeDecodeError, LookupError):
+        try:
+            return raw.decode("utf-8")
+        except UnicodeDecodeError:
+            return raw.decode("cp949", errors="replace")
+
+
+def _parse_congestion_with_bs4(html: str) -> Dict | None:
+    """Parse congestion data from HTML using BeautifulSoup.
+
+    Looks for various patterns:
+      - <span>XX%</span> with data attributes
+      - Elements with class bg_spare / bg_general / bg_congestion
+      - Any percentage within relevant container elements
+    """
+    if not HAS_BS4:
         return None
 
-    # Find all percentage patterns: >XX%< in the entire page
-    percentages = _re.findall(rb">(\d+)%<", raw)
+    soup = BeautifulSoup(html, "lxml")
 
-    if len(percentages) < 1:
-        _LIVE_CACHE = None
+    # Strategy 1: Find the main utilization element
+    # Look for elements with data-util attribute (man/woman indicators)
+    man_elem = soup.find(attrs={"data-util": "man"})
+    woman_elem = soup.find(attrs={"data-util": "woman"})
+
+    male_pct = 0
+    female_pct = 0
+    total_pct = 0
+
+    # Find all percentage spans within relevant containers
+    all_percentages = []
+
+    # Look for <span> tags containing percentages
+    for span in soup.find_all("span"):
+        text = span.get_text(strip=True)
+        if text.endswith("%"):
+            try:
+                val = int(text.rstrip("%"))
+                all_percentages.append(val)
+            except ValueError:
+                pass
+
+    # Also look in any element with percentage text
+    if not all_percentages:
+        for elem in soup.find_all(string=_re.compile(r"\d+%")):
+            try:
+                val = int(_re.search(r"(\d+)%", elem).group(1))  # type: ignore[union-attr]
+                all_percentages.append(val)
+            except (ValueError, AttributeError):
+                pass
+
+    if len(all_percentages) >= 1:
+        total_pct = all_percentages[0]
+        if len(all_percentages) >= 3:
+            male_pct = all_percentages[1]
+            female_pct = all_percentages[2]
+        elif len(all_percentages) >= 2:
+            male_pct = all_percentages[1]
+            female_pct = total_pct // 2
+        else:
+            male_pct = total_pct // 2
+            female_pct = total_pct // 2
+
+    if total_pct == 0:
         return None
 
-    total_pct = int(percentages[0])
-
-    # Male/female rates: 2nd = male (man), 3rd = female (woman) in page order
-    male_pct = int(percentages[1]) if len(percentages) > 1 else total_pct // 2
-    female_pct = int(percentages[2]) if len(percentages) > 2 else total_pct // 2
-
-    # Determine label from class name (search the whole page)
-    # bg_spare = 여유, bg_general = 보통, bg_congestion = 혼잡
+    # Determine label from class names
     status_label = "여유"
-    congestion_match = _re.search(rb"bg_congestion", raw)
-    general_match = _re.search(rb"bg_general", raw)
-    spare_match = _re.search(rb"bg_spare", raw)
-    if congestion_match:
+    if soup.find(class_=_re.compile(r"bg_congestion", _re.I)):
         status_label = "혼잡"
-    elif general_match:
+    elif soup.find(class_=_re.compile(r"bg_general", _re.I)):
         status_label = "보통"
-    elif spare_match:
+    elif soup.find(class_=_re.compile(r"bg_spare", _re.I)):
         status_label = "여유"
 
     # Colour mapping
@@ -157,18 +202,132 @@ def _scrape_live_data() -> Dict | None:
     else:
         color = "#ef4444"
 
-    result = {
+    return {
         "level": total_pct,
         "label": status_label,
         "color": color,
         "male_rate": male_pct,
         "female_rate": female_pct,
-        "scraped_at": now,
     }
 
-    _LIVE_CACHE = result
+
+def _parse_congestion_regex(raw: bytes) -> Dict | None:
+    """Parse congestion data from raw bytes using regex (fallback).
+
+    The page HTML (EUC-KR) contains patterns like:
+      <span>23%</span>   (total utilization)
+      data-util="man" ... <span>11%</span>   (male)
+      data-util="woman" ... <span>30%</span> (female)
+      class="... bg_spare" = 여유, bg_general = 보통, bg_congestion = 혼잡
+    """
+    # Find all percentage patterns: >XX%< in the entire page
+    percentages = _re.findall(rb">(\d+)%<", raw)
+
+    if len(percentages) < 1:
+        return None
+
+    total_pct = int(percentages[0])
+
+    # Male/female rates: 2nd = male (man), 3rd = female (woman) in page order
+    male_pct = int(percentages[1]) if len(percentages) > 1 else total_pct // 2
+    female_pct = int(percentages[2]) if len(percentages) > 2 else total_pct // 2
+
+    # Determine label from class name (search the whole page)
+    status_label = "여유"
+    if _re.search(rb"bg_congestion", raw):
+        status_label = "혼잡"
+    elif _re.search(rb"bg_general", raw):
+        status_label = "보통"
+    elif _re.search(rb"bg_spare", raw):
+        status_label = "여유"
+
+    # Colour mapping
+    if total_pct < 30:
+        color = "#22c55e"
+    elif total_pct < 50:
+        color = "#eab308"
+    elif total_pct < 70:
+        color = "#f97316"
+    else:
+        color = "#ef4444"
+
+    return {
+        "level": total_pct,
+        "label": status_label,
+        "color": color,
+        "male_rate": male_pct,
+        "female_rate": female_pct,
+    }
+
+
+def _try_fetch_url(client: httpx.Client, url: str) -> bytes | None:
+    """Try to fetch a URL with proper headers and timeout."""
+    try:
+        resp = client.get(
+            url,
+            headers=_LIVE_HEADERS,
+            timeout=10.0,
+            follow_redirects=True,
+        )
+        resp.raise_for_status()
+        return resp.content
+    except Exception:
+        return None
+
+
+def _scrape_live_data() -> Dict | None:
+    """Scrape real-time congestion data from jjss.or.kr.
+
+    Uses httpx for HTTP requests with multiple URL fallbacks.
+    Parses HTML using BeautifulSoup (preferred) or regex (fallback).
+    Handles EUC-KR encoded pages.
+
+    Returns a dict with 'level', 'male_rate', 'female_rate', 'label',
+    'color', and 'scraped_at', or None if all scraping attempts fail.
+    """
+    global _LIVE_CACHE, _LIVE_CACHE_TIME
+
+    now = datetime.now(ZoneInfo("Asia/Seoul"))
+
+    # Cache for up to 60 seconds
+    if _LIVE_CACHE is not None and _LIVE_CACHE_TIME is not None:
+        if (now - _LIVE_CACHE_TIME).total_seconds() < 60:
+            return _LIVE_CACHE
+
+    raw = None
+
+    # verify=False: some Korean gov't sites use self-signed certs
+    with httpx.Client(verify=False) as client:
+        # Try each URL
+        for url in _LIVE_URLS:
+            result = _try_fetch_url(client, url)
+            if result is not None and len(result) > 100:
+                raw = result
+                break
+
+    if raw is None:
+        _LIVE_CACHE = None
+        _LIVE_CACHE_TIME = now
+        return None
+
+    # Try BeautifulSoup parsing first (from decoded HTML)
+    html = _decode_euckr(raw)
+    parsed = _parse_congestion_with_bs4(html) if HAS_BS4 else None
+
+    # Fall back to regex parsing on raw bytes
+    if parsed is None:
+        parsed = _parse_congestion_regex(raw)
+
+    if parsed is None:
+        _LIVE_CACHE = None
+        _LIVE_CACHE_TIME = now
+        return None
+
+    parsed["scraped_at"] = now
+
+    _LIVE_CACHE = parsed
     _LIVE_CACHE_TIME = now
-    return result
+    return parsed
 
 
 # ── Congestion estimation logic ─────────────────────────────────────────────
@@ -193,7 +352,7 @@ def _estimate_congestion(now: datetime) -> Dict:
         return {
             "level": 0,
             "label": "휴장",
-            "color": "#8b5cf6",
+            "color": "#ef4444",
             "tip": f"🔒 오늘은 {closed_reason}입니다. 수영장을 이용할 수 없습니다.",
             "day_type": "일요일·공휴일" if now.weekday() == 6 else ("토요일" if now.weekday() == 5 else "평일"),
             "is_weekend": now.weekday() >= 5,
@@ -336,7 +495,7 @@ def _weekly_schedule(now: datetime) -> List[Dict]:
             status = "휴장"
             peak_level = 0
             peak_label = "휴장"
-            peak_color = "#8b5cf6"
+            peak_color = "#ef4444"
         else:
             start_h, end_h = _get_operating_hours(day)
             hours_str = f"{start_h:02d}:00~{end_h:02d}:00"
@@ -485,6 +644,7 @@ async def get_congestion():
 
     current["is_closed"] = is_closed
     current["closed_reason"] = closed_reason
+    current["last_updated"] = live["scraped_at"].strftime("%Y-%m-%d %H:%M:%S") if live is not None else None
 
     forecast = _hourly_forecast(now)
     trend = _daily_trend(now)
@@ -861,11 +1021,11 @@ HTML_PAGE = """<!DOCTYPE html>
   }
   .gauge-status-badge.closed .status-dot { background: #94a3b8; animation: none; }
   .gauge-status-badge.closed-day {
-    background: rgba(139, 92, 246, 0.1);
-    color: #a78bfa;
-    border: 1px solid rgba(139, 92, 246, 0.15);
+    background: rgba(239, 68, 68, 0.1);
+    color: #f87171;
+    border: 1px solid rgba(239, 68, 68, 0.15);
   }
-  .gauge-status-badge.closed-day .status-dot { background: #a78bfa; animation: none; }
+  .gauge-status-badge.closed-day .status-dot { background: #f87171; animation: none; }
 
   /* ── Closure banner ─────────────────────────────── */
   .closed-banner {
@@ -873,8 +1033,8 @@ HTML_PAGE = """<!DOCTYPE html>
     margin-bottom: 22px;
     padding: 18px 22px;
     border-radius: var(--radius-sm);
-    background: linear-gradient(135deg, rgba(139, 92, 246, 0.08), rgba(99, 102, 241, 0.04));
-    border: 1px solid rgba(139, 92, 246, 0.12);
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.08), rgba(248, 113, 113, 0.04));
+    border: 1px solid rgba(239, 68, 68, 0.12);
     text-align: center;
     animation: fade-in-up 0.6s var(--transition) both;
   }
@@ -886,13 +1046,13 @@ HTML_PAGE = """<!DOCTYPE html>
   .closed-banner .cb-title {
     font-size: 1.15rem;
     font-weight: 800;
-    color: #a78bfa;
+    color: #f87171;
     margin-bottom: 4px;
     letter-spacing: -0.3px;
   }
   .closed-banner .cb-desc {
     font-size: 0.85rem;
-    color: rgba(167, 139, 250, 0.7);
+    color: rgba(248, 113, 113, 0.7);
     line-height: 1.5;
   }
   .closed-banner .cb-closure {
@@ -900,10 +1060,10 @@ HTML_PAGE = """<!DOCTYPE html>
     padding: 8px 18px;
     display: inline-block;
     border-radius: 20px;
-    background: rgba(139, 92, 246, 0.08);
-    border: 1px solid rgba(139, 92, 246, 0.1);
+    background: rgba(239, 68, 68, 0.08);
+    border: 1px solid rgba(239, 68, 68, 0.1);
     font-size: 0.78rem;
-    color: #a78bfa;
+    color: #f87171;
     font-weight: 600;
     letter-spacing: 0.2px;
   }
@@ -1090,6 +1250,21 @@ HTML_PAGE = """<!DOCTYPE html>
   .source-badge.heuristic::before {
     content: '📊';
     font-size: 0.55rem;
+  }
+
+  /* ── Last updated timestamp ────────────────────────── */
+  .last-updated {
+    position: absolute;
+    bottom: 18px;
+    right: 24px;
+    font-size: 0.58rem;
+    color: rgba(126, 147, 176, 0.4);
+    font-weight: 400;
+    letter-spacing: 0.2px;
+    z-index: 2;
+  }
+  .last-updated.live {
+    color: rgba(56, 189, 248, 0.5);
   }
 
   .gauge-card::before {
@@ -1422,12 +1597,12 @@ HTML_PAGE = """<!DOCTYPE html>
 
   /* Closed day cell */
   .weekly-col.closed-day {
-    border-color: rgba(139, 92, 246, 0.1);
-    background: rgba(139, 92, 246, 0.03);
+    border-color: rgba(239, 68, 68, 0.1);
+    background: rgba(239, 68, 68, 0.03);
   }
   .weekly-col.closed-day:hover {
-    border-color: rgba(139, 92, 246, 0.2);
-    background: rgba(139, 92, 246, 0.06);
+    border-color: rgba(239, 68, 68, 0.2);
+    background: rgba(239, 68, 68, 0.06);
   }
 
   /* TODAY pill */
@@ -1453,7 +1628,7 @@ HTML_PAGE = """<!DOCTYPE html>
     letter-spacing: 0.3px;
   }
   .weekly-col.today .w-day { color: var(--accent); }
-  .weekly-col.closed-day .w-day { color: #a78bfa; }
+  .weekly-col.closed-day .w-day { color: #f87171; }
 
   /* Date (5.20) */
   .weekly-col .w-date {
@@ -1463,7 +1638,7 @@ HTML_PAGE = """<!DOCTYPE html>
     margin-bottom: 10px;
   }
   .weekly-col.today .w-date { color: rgba(56, 189, 248, 0.4); }
-  .weekly-col.closed-day .w-date { color: rgba(167, 139, 250, 0.25); }
+  .weekly-col.closed-day .w-date { color: rgba(248, 113, 113, 0.4); }
 
   /* Operating hours */
   .weekly-col .w-hours {
@@ -1475,7 +1650,7 @@ HTML_PAGE = """<!DOCTYPE html>
     font-variant-numeric: tabular-nums;
   }
   .weekly-col.today .w-hours { color: var(--text-bright); }
-  .weekly-col.closed-day .w-hours { color: rgba(167, 139, 250, 0.4); }
+  .weekly-col.closed-day .w-hours { color: rgba(248, 113, 113, 0.5); }
 
   /* Status badge (운영 / 휴장) */
   .weekly-col .w-status {
@@ -1501,9 +1676,9 @@ HTML_PAGE = """<!DOCTYPE html>
     background: #4ade80;
   }
   .weekly-col .w-status.closed {
-    background: rgba(139, 92, 246, 0.08);
-    color: #a78bfa;
-    border: 1px solid rgba(139, 92, 246, 0.12);
+    background: rgba(239, 68, 68, 0.08);
+    color: #f87171;
+    border: 1px solid rgba(239, 68, 68, 0.12);
   }
   .weekly-col .w-status.closed::before {
     content: '✕';
@@ -1605,6 +1780,11 @@ HTML_PAGE = """<!DOCTYPE html>
   }
 
   @media (max-width: 640px) {
+    .last-updated {
+      bottom: 14px;
+      right: 18px;
+      font-size: 0.55rem;
+    }
     @supports(padding:max(0px)) {
       .container { padding: 16px max(16px, env(safe-area-inset-left)) 40px max(16px, env(safe-area-inset-right)); }
     }
@@ -1875,6 +2055,9 @@ HTML_PAGE = """<!DOCTYPE html>
 
       <!-- Data source -->
       <div class="source-badge heuristic" id="source-badge">예측</div>
+
+      <!-- Last updated timestamp -->
+      <div class="last-updated" id="last-updated" style="display:none"></div>
 
       <!-- Gender usage rates -->
       <div class="gender-rates">
@@ -2217,9 +2400,9 @@ async function fetchData() {
       closedDesc.textContent = '오늘은 수영장 휴장일입니다. 운영 시간에 방문해주세요.';
       // Show status as closed in the gauge
       document.getElementById('level-pct').textContent = '휴장';
-      document.getElementById('level-pct').style.color = '#8b5cf6';
+      document.getElementById('level-pct').style.color = '#ef4444';
       document.getElementById('level-label').textContent = '오늘은 쉬는 날';
-      document.getElementById('level-label').style.color = '#a78bfa';
+      document.getElementById('level-label').style.color = '#f87171';
       // Hide gender rates on closed days
       document.querySelector('.gender-rates').style.display = 'none';
       // Hide tip when closed
@@ -2239,14 +2422,33 @@ async function fetchData() {
     // Data source badge
     const sourceBadge = document.getElementById('source-badge');
     const footerSource = document.getElementById('footer-source');
+    const lastUpdated = document.getElementById('last-updated');
     if (data.current.data_source === 'live') {
       sourceBadge.className = 'source-badge live';
       sourceBadge.textContent = '실시간';
       footerSource.textContent = '실시간';
+      // Show last updated time
+      if (data.current.last_updated) {
+        const now = getKST();
+        const updated = new Date(data.current.last_updated.replace(' ', 'T') + '+09:00');
+        const diffSec = Math.floor((now - updated) / 1000);
+        let timeAgo;
+        if (diffSec < 60) {
+          timeAgo = '방금 전';
+        } else if (diffSec < 3600) {
+          timeAgo = Math.floor(diffSec / 60) + '분 전';
+        } else {
+          timeAgo = Math.floor(diffSec / 3600) + '시간 전';
+        }
+        lastUpdated.textContent = '⏱ ' + timeAgo;
+        lastUpdated.className = 'last-updated live';
+        lastUpdated.style.display = '';
+      }
     } else {
       sourceBadge.className = 'source-badge heuristic';
       sourceBadge.textContent = '예측';
       footerSource.textContent = '예측';
+      lastUpdated.style.display = 'none';
     }
 
     // Gender rates
