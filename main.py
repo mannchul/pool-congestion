@@ -127,14 +127,13 @@ _LIVE_HEADERS = {
 # Used as default predictions when live scraping is unavailable.
 _KNOWN_HISTORICAL_PATTERNS: dict = {
     "weekday": {
-        # Updated from actual Tuesday June 2, 2026 data (scraped at ~17:40 KST)
+        # Updated from latest scrape data (June 2, ~18:00 KST)
         # Pattern: morning PEAK at 06시 (88 users) → gradual decline →
         #          lunch break → afternoon moderate → evening very quiet
-        # Note: This is a snapshot; data varies daily, but the RELATIVE pattern
-        #       (busiest at 06시, quietest at lunch & evening) is consistent.
+        # Note: Data varies daily. The RELATIVE pattern is consistent.
         6: 88, 7: 31, 8: 29, 9: 54, 10: 40,
         11: 5, 12: 4, 13: 39, 14: 16, 15: 22,
-        16: 20, 17: 11, 18: 2, 19: 1, 20: 1,
+        16: 20, 17: 17, 18: 2, 19: 1, 20: 1,
     },
     "saturday": {
         # Estimated based on typical Saturday pool usage patterns
@@ -153,7 +152,7 @@ _KNOWN_HISTORICAL_PATTERNS: dict = {
 
 # Default calibration levels by day type (typical congestion % at current hour)
 _DEFAULT_DAY_LEVELS: dict = {
-    "weekday": 24,    # 24% typical for weekday 16시 (updated from June 2 data)
+    "weekday": 28,    # 28% actual current utilization (updated from latest scrape)
     "saturday": 55,   # 55% typical for Saturday 14시
     "sunday": 50,     # 50% typical for Sunday 15시
 }
@@ -647,8 +646,8 @@ def _estimate_congestion(now: datetime) -> Dict:
             level, label, tip = 22, "여유", "오후 늦게, 한적하게 이용할 수 있습니다."
             male_rate, female_rate, status = 20, 24, "운영중"
         elif 16 <= hour < 18:
-            level, label, tip = 24, "여유", "오후 늦은 시간, 평일 중 가장 여유로운 시간대입니다."
-            male_rate, female_rate, status = 20, 28, "운영중"
+            level, label, tip = 28, "여유", "오후 늦은 시간, 평일 중 가장 여유로운 시간대입니다."
+            male_rate, female_rate, status = 22, 31, "운영중"
         elif 18 <= hour <= 20:
             level, label, tip = 12, "여유", "🌙 저녁 시간, 가벼운 운동하기 좋습니다. 방문객이 거의 없어요."
             male_rate, female_rate, status = 10, 14, "운영중"
