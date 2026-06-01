@@ -1433,6 +1433,10 @@ HTML_PAGE = """<!DOCTYPE html>
     border-color: rgba(139, 92, 246, 0.1);
     background: rgba(139, 92, 246, 0.03);
   }
+  .weekly-col.closed-day:hover {
+    border-color: rgba(139, 92, 246, 0.2);
+    background: rgba(139, 92, 246, 0.06);
+  }
 
   /* TODAY pill */
   .weekly-col .w-today-tag {
@@ -2240,7 +2244,7 @@ function renderWeeklySchedule(schedule) {
       ${d.is_today ? '<div class="w-today-tag">TODAY</div>' : ''}
       <div class="w-day">${d.day_name}</div>
       <div class="w-date">${d.date}</div>
-      <div class="w-hours">${d.is_closed ? '휴장' : compactHours}</div>
+      <div class="w-hours">${d.is_closed ? '--:--' : compactHours}</div>
       <div class="w-status ${d.is_closed ? 'closed' : 'open'}">${d.is_closed ? '휴장' : '운영'}</div>
     `;
 
