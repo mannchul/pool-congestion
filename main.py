@@ -9,6 +9,7 @@ from zoneinfo import ZoneInfo
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
 import re as _re
+import ssl
 import urllib.request
 
 app = FastAPI(
@@ -106,10 +107,23 @@ _LIVE_HEADERS = {
 
 
 def _try_fetch_url(url: str, timeout: int = 10) -> bytes | None:
-    """Try to fetch a URL using urllib with proper headers."""
+    """Try to fetch a URL using urllib with proper headers and SSL handling."""
     try:
         req = urllib.request.Request(url, headers=_LIVE_HEADERS)
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        # Approach 1: Normal SSL verification
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                data = resp.read()
+                if len(data) > 100:
+                    return data
+        except urllib.error.URLError:
+            pass
+
+        # Approach 2: Relaxed SSL (for self-signed certs on Korean gov sites)
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        with urllib.request.urlopen(req, timeout=timeout, context=ctx) as resp:
             return resp.read()
     except Exception:
         return None
