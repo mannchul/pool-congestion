@@ -1457,9 +1457,9 @@ HTML_PAGE = """<!DOCTYPE html>
 
   /* Date (5.20) */
   .weekly-col .w-date {
-    font-size: 0.68rem;
-    color: rgba(126, 147, 176, 0.4);
-    font-weight: 500;
+    font-size: 0.85rem;
+    color: rgba(126, 147, 176, 0.6);
+    font-weight: 600;
     margin-bottom: 10px;
   }
   .weekly-col.today .w-date { color: rgba(56, 189, 248, 0.4); }
@@ -1618,7 +1618,7 @@ HTML_PAGE = """<!DOCTYPE html>
     .weekly-col { padding: 10px 4px 10px; max-width: none; }
     .weekly-col .w-today-tag { font-size: 0.42rem; padding: 1px 8px; margin-bottom: 4px; }
     .weekly-col .w-day { font-size: 0.72rem; }
-    .weekly-col .w-date { font-size: 0.6rem; margin-bottom: 6px; }
+    .weekly-col .w-date { font-size: 0.75rem; margin-bottom: 6px; }
     .weekly-col .w-hours { font-size: 0.65rem; margin-bottom: 6px; }
     .weekly-col .w-status { font-size: 0.55rem; padding: 2px 8px; }
     .weekly-col .w-status.open::before,
@@ -1717,7 +1717,7 @@ HTML_PAGE = """<!DOCTYPE html>
     .weekly-col { padding: 8px 3px 8px; max-width: none; }
     .weekly-col .w-today-tag { font-size: 0.38rem; padding: 1px 6px; margin-bottom: 3px; }
     .weekly-col .w-day { font-size: 0.65rem; }
-    .weekly-col .w-date { font-size: 0.52rem; margin-bottom: 4px; }
+    .weekly-col .w-date { font-size: 0.65rem; margin-bottom: 4px; }
     .weekly-col .w-hours { font-size: 0.58rem; margin-bottom: 4px; }
     .weekly-col .w-status { font-size: 0.5rem; padding: 1px 6px; }
     .weekly-col .w-status.open::before,
@@ -1751,7 +1751,7 @@ HTML_PAGE = """<!DOCTYPE html>
     .weekly-col { padding: 6px 2px 6px; max-width: none; }
     .weekly-col .w-today-tag { font-size: 0.34rem; padding: 0 5px; margin-bottom: 2px; }
     .weekly-col .w-day { font-size: 0.58rem; }
-    .weekly-col .w-date { font-size: 0.48rem; margin-bottom: 3px; }
+    .weekly-col .w-date { font-size: 0.6rem; margin-bottom: 3px; }
     .weekly-col .w-hours { font-size: 0.5rem; margin-bottom: 3px; }
     .weekly-col .w-status { font-size: 0.45rem; padding: 1px 5px; }
     .weekly-col .w-status.open::before,
