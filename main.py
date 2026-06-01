@@ -1913,7 +1913,7 @@ HTML_PAGE = """<!DOCTYPE html>
     <!-- Hourly forecast + trend (integrated) -->
     <div class="forecast-section animate-in animate-in-delay-4">
       <div class="section-title">
-        <span>📊</span> 시간대별 혼잡도 트렌드
+        <span>📊</span> 시간대별 예상 혼잡도
         <span class="badge-count" id="forecast-count">13시간</span>
       </div>
       <div class="forecast-scroll-wrap" id="forecast-scroll-wrap">
