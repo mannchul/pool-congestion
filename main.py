@@ -565,7 +565,7 @@ HTML_PAGE = """<!DOCTYPE html>
 
   /* Safe area for notched phones */
   @supports(padding:max(0px)) {
-    .container { padding-left: max(20px, env(safe-area-inset-left)); padding-right: max(20px, env(safe-area-inset-right)); }
+    .container { padding-left: max(24px, env(safe-area-inset-left)); padding-right: max(24px, env(safe-area-inset-right)); }
   }
 
   /* Prevent overscroll on forecast horizontal scroll */
@@ -693,9 +693,9 @@ HTML_PAGE = """<!DOCTYPE html>
 
   /* ── Layout ──────────────────────────────────────────── */
   .container {
-    max-width: 920px;
+    max-width: 960px;
     margin: 0 auto;
-    padding: 20px 20px 50px;
+    padding: 24px 24px 60px;
     position: relative;
   }
 
@@ -733,18 +733,18 @@ HTML_PAGE = """<!DOCTYPE html>
   /* ── Header ──────────────────────────────────────────── */
   header {
     text-align: center;
-    padding: 28px 0 6px;
+    padding: 32px 0 10px;
     position: relative;
   }
   header::after {
     content: '';
     display: block;
-    width: 60px;
+    width: 80px;
     height: 3px;
     background: linear-gradient(90deg, transparent, var(--accent), transparent);
     border-radius: 4px;
-    margin: 14px auto 0;
-    opacity: 0.4;
+    margin: 16px auto 0;
+    opacity: 0.5;
   }
   header h1 {
     font-size: 1.85rem;
@@ -779,17 +779,15 @@ HTML_PAGE = """<!DOCTYPE html>
     display: flex;
     justify-content: center;
     align-items: center;
-    gap: 14px;
-    margin: 18px 0 28px;
-    padding: 12px 24px;
+    gap: 16px;
+    margin: 22px auto 32px;
+    padding: 14px 28px;
     background: rgba(12, 24, 48, 0.4);
     border: 1px solid rgba(56, 189, 248, 0.06);
     border-radius: 50px;
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
     width: fit-content;
-    margin-left: auto;
-    margin-right: auto;
   }
   .time-bar .live-dot {
     display: inline-block;
@@ -824,8 +822,8 @@ HTML_PAGE = """<!DOCTYPE html>
   /* ── Status badge ──────────────────────────────────── */
   .gauge-status-badge {
     position: absolute;
-    top: 16px;
-    right: 20px;
+    top: 18px;
+    right: 22px;
     display: inline-flex;
     align-items: center;
     gap: 7px;
@@ -912,12 +910,12 @@ HTML_PAGE = """<!DOCTYPE html>
 
   /* ── Gender rates ───────────────────────────────────── */
   .gender-rates {
-    margin: 20px auto 0;
-    max-width: 340px;
+    margin: 24px auto 0;
+    max-width: 360px;
     display: flex;
     flex-direction: column;
-    gap: 12px;
-    padding: 18px 22px;
+    gap: 14px;
+    padding: 20px 24px;
     border-radius: var(--radius-sm);
     background: rgba(0, 0, 0, 0.2);
     border: 1px solid rgba(148, 163, 184, 0.04);
@@ -986,7 +984,7 @@ HTML_PAGE = """<!DOCTYPE html>
     font-size: 1.05rem;
     font-weight: 700;
     color: var(--text-bright);
-    margin-bottom: 16px;
+    margin-bottom: 18px;
     display: flex;
     align-items: center;
     gap: 10px;
@@ -1034,7 +1032,7 @@ HTML_PAGE = """<!DOCTYPE html>
 
   /* ── Gauge card ──────────────────────────────────────── */
   .gauge-card {
-    padding: 40px 30px 32px;
+    padding: 44px 32px 36px;
     text-align: center;
     position: relative;
     overflow: hidden;
@@ -1059,8 +1057,8 @@ HTML_PAGE = """<!DOCTYPE html>
   /* ── Data source badge ──────────────────────────────── */
   .source-badge {
     position: absolute;
-    bottom: 16px;
-    left: 22px;
+    bottom: 18px;
+    left: 24px;
     display: inline-flex;
     align-items: center;
     gap: 5px;
@@ -1152,8 +1150,8 @@ HTML_PAGE = """<!DOCTYPE html>
 
   /* ── Tip ──────────────────────────────────────────────── */
   .gauge-tip {
-    margin-top: 18px;
-    padding: 16px 22px;
+    margin-top: 22px;
+    padding: 18px 24px;
     background: rgba(56, 189, 248, 0.04);
     border-radius: var(--radius-sm);
     font-size: 0.88rem;
@@ -1161,7 +1159,7 @@ HTML_PAGE = """<!DOCTYPE html>
     border-left: 3px solid var(--accent);
     text-align: left;
     transition: border-color 0.6s, background 0.6s;
-    line-height: 1.55;
+    line-height: 1.6;
     position: relative;
   }
   .gauge-tip::before {
@@ -1173,8 +1171,8 @@ HTML_PAGE = """<!DOCTYPE html>
   .info-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-    gap: 14px;
-    margin: 28px 0;
+    gap: 16px;
+    margin: 32px 0;
   }
   .info-item {
     background: var(--card);
@@ -1182,7 +1180,7 @@ HTML_PAGE = """<!DOCTYPE html>
     -webkit-backdrop-filter: blur(12px);
     border: 1px solid var(--card-border);
     border-radius: var(--radius-sm);
-    padding: 18px 22px;
+    padding: 20px 24px;
     transition: transform var(--transition), background var(--transition), box-shadow var(--transition);
     position: relative;
     overflow: hidden;
@@ -1226,8 +1224,8 @@ HTML_PAGE = """<!DOCTYPE html>
     display: flex;
     flex-direction: row;
     align-items: center;
-    gap: 10px;
-    padding: 10px 16px;
+    gap: 12px;
+    padding: 12px 18px;
   }
   .hours-row {
     flex: 1;
@@ -1281,7 +1279,7 @@ HTML_PAGE = """<!DOCTYPE html>
     border: 1px solid rgba(239, 68, 68, 0.12);
   }
   /* ── Forecast ─────────────────────────────────────────── */
-  .forecast-section { margin-top: 32px; }
+  .forecast-section { margin-top: 36px; }
 
   .forecast-grid {
     display: grid;
@@ -1327,11 +1325,11 @@ HTML_PAGE = """<!DOCTYPE html>
     letter-spacing: 0.2px;
   }
   .forecast-item .bar-wrap {
-    height: 44px;
+    height: 48px;
     display: flex;
     align-items: flex-end;
     justify-content: center;
-    margin-bottom: 5px;
+    margin-bottom: 6px;
     overflow: hidden;
   }
   .forecast-item .bar {
@@ -1367,9 +1365,9 @@ HTML_PAGE = """<!DOCTYPE html>
   }
 
   /* ── Weekly schedule (calendar design) ──────────────── */
-  .weekly-section { margin: 24px 0; }
+  .weekly-section { margin: 28px 0; }
   .weekly-card {
-    padding: 22px 20px 18px;
+    padding: 24px 22px 20px;
     display: flex;
     flex-direction: column;
     gap: 0;
@@ -1527,8 +1525,8 @@ HTML_PAGE = """<!DOCTYPE html>
   /* ── Footer ───────────────────────────────────────────── */
   footer {
     text-align: center;
-    margin-top: 50px;
-    padding: 24px 0 10px;
+    margin-top: 56px;
+    padding: 28px 0 14px;
     border-top: 1px solid rgba(56, 189, 248, 0.04);
     font-size: 0.78rem;
     color: var(--text-dim);
@@ -1608,11 +1606,14 @@ HTML_PAGE = """<!DOCTYPE html>
 
   @media (max-width: 640px) {
     @supports(padding:max(0px)) {
-      .container { padding: 14px max(14px, env(safe-area-inset-left)) 36px max(14px, env(safe-area-inset-right)); }
+      .container { padding: 16px max(16px, env(safe-area-inset-left)) 40px max(16px, env(safe-area-inset-right)); }
     }
-    .container { padding: 14px 14px 36px; }
+    .container { padding: 16px 16px 40px; }
+    header { padding: 24px 0 8px; }
+    header::after { width: 50px; margin: 14px auto 0; }
     header h1 { font-size: 1.4rem; }
-    .weekly-card { padding: 16px 12px 14px; }
+    header p { font-size: 0.8rem; }
+    .weekly-card { padding: 18px 14px 16px; }
     .weekly-strip { gap: 6px; }
     .weekly-col { padding: 10px 4px 10px; max-width: none; }
     .weekly-col .w-today-tag { font-size: 0.42rem; padding: 1px 8px; margin-bottom: 4px; }
@@ -1622,17 +1623,17 @@ HTML_PAGE = """<!DOCTYPE html>
     .weekly-col .w-status { font-size: 0.55rem; padding: 2px 8px; }
     .weekly-col .w-status.open::before,
     .weekly-col .w-status.closed::before { width: 4px; height: 4px; font-size: 0.42rem; }
-    header::after { width: 40px; }
     .time-bar {
-      padding: 10px 16px;
+      padding: 12px 18px;
       gap: 10px;
       font-size: 0.95rem;
       width: 100%;
       border-radius: 30px;
+      margin: 18px auto 28px;
     }
     #clock-display { font-size: 1rem; }
     #date-display { font-size: 0.75rem; }
-    .gauge-card { padding: 28px 18px 24px; }
+    .gauge-card { padding: 30px 20px 26px; }
     .gauge-ring { width: 170px; height: 170px; }
     .gauge-ring svg { width: 170px; height: 170px; }
     .gauge-label .pct { font-size: 2.5rem; }
@@ -1645,31 +1646,35 @@ HTML_PAGE = """<!DOCTYPE html>
       min-height: 36px;
     }
     .source-badge {
-      bottom: 12px;
-      left: 16px;
+      bottom: 14px;
+      left: 18px;
       font-size: 0.58rem;
     }
-    .info-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
-    .info-item { padding: 14px 16px; min-height: 52px; }
+    .info-grid { grid-template-columns: 1fr 1fr; gap: 12px; margin: 28px 0; }
+    .info-item { padding: 16px 18px; min-height: 52px; }
     .info-item .value { font-size: 0.85rem; }
-    .hours-combined { padding: 8px 14px; gap: 8px; }
+    .hours-combined { padding: 10px 16px; gap: 10px; }
     .hours-label { font-size: 0.58rem; }
     .hours-value { font-size: 0.68rem; }
     .hours-divider { height: 16px; }
-    .gender-rates { padding: 16px 18px; gap: 14px; }
+    .gender-rates { padding: 16px 18px; gap: 14px; margin: 20px auto 0; }
     .gender-bar-track { height: 14px; }
     .gender-row { gap: 10px; min-height: 40px; }
-    .section-title { font-size: 0.95rem; }
+    .section-title { font-size: 0.95rem; margin-bottom: 14px; }
+    .weekly-section { margin: 24px 0; }
+    .forecast-section { margin-top: 28px; }
+    .gauge-tip { margin-top: 18px; padding: 14px 18px; }
+    footer { margin-top: 44px; padding: 22px 0 12px; }
 
     /* Forecast: horizontal scroll on mobile */
-    .forecast-scroll-wrap { margin: 0 -14px; }
+    .forecast-scroll-wrap { margin: 0 -16px; }
     .forecast-scroll-wrap .forecast-grid {
       display: flex;
       overflow-x: auto;
       scroll-snap-type: x mandatory;
       -webkit-overflow-scrolling: touch;
       gap: 10px;
-      padding: 4px 14px 12px;
+      padding: 4px 16px 12px;
       scrollbar-width: thin;
     }
     .forecast-scroll-wrap .forecast-grid::-webkit-scrollbar { height: 4px; }
@@ -1681,8 +1686,8 @@ HTML_PAGE = """<!DOCTYPE html>
     .forecast-scroll-wrap .forecast-item {
       scroll-snap-align: start;
       min-width: 72px;
-      padding: 8px 4px 8px;
-      min-height: 82px;
+      padding: 10px 4px 10px;
+      min-height: 86px;
       display: flex;
       flex-direction: column;
       justify-content: center;
@@ -1696,7 +1701,7 @@ HTML_PAGE = """<!DOCTYPE html>
     .scroll-hint { display: block; }
 
     .forecast-item .bar { width: 16px; }
-    .forecast-item .bar-wrap { height: 38px; }
+    .forecast-item .bar-wrap { height: 40px; }
     .forecast-item .hour { font-size: 0.68rem; }
     .forecast-item .f-label { font-size: 0.66rem; }
     .forecast-item .bar::before {
@@ -1706,8 +1711,8 @@ HTML_PAGE = """<!DOCTYPE html>
   }
 
   @media (max-width: 420px) {
-    .info-grid { grid-template-columns: 1fr; }
-    .weekly-card { padding: 14px 8px 12px; }
+    .info-grid { grid-template-columns: 1fr; gap: 10px; }
+    .weekly-card { padding: 14px 10px 12px; }
     .weekly-strip { gap: 4px; }
     .weekly-col { padding: 8px 3px 8px; max-width: none; }
     .weekly-col .w-today-tag { font-size: 0.38rem; padding: 1px 6px; margin-bottom: 3px; }
@@ -1717,24 +1722,31 @@ HTML_PAGE = """<!DOCTYPE html>
     .weekly-col .w-status { font-size: 0.5rem; padding: 1px 6px; }
     .weekly-col .w-status.open::before,
     .weekly-col .w-status.closed::before { width: 3px; height: 3px; font-size: 0.38rem; }
-    .gender-rates { max-width: 100%; }
-    .time-bar { flex-wrap: wrap; justify-content: center; gap: 6px; padding: 10px 12px; }
+    .gender-rates { max-width: 100%; padding: 14px 16px; }
+    .time-bar { flex-wrap: wrap; justify-content: center; gap: 8px; padding: 10px 14px; margin: 16px auto 24px; }
+    .gauge-card { padding: 26px 16px 22px; }
     .gauge-ring { width: 150px; height: 150px; }
     .gauge-ring svg { width: 150px; height: 150px; }
     .gauge-label .pct { font-size: 2.2rem; }
     .gauge-label .pct-label { font-size: 0.85rem; }
-    .gauge-tip { font-size: 0.82rem; padding: 14px 16px; }
-    footer { font-size: 0.72rem; }
+    .gauge-tip { font-size: 0.82rem; padding: 14px 16px; margin-top: 16px; }
+    .gauge-status-badge { top: 10px; right: 12px; padding: 5px 12px; font-size: 0.68rem; min-height: 32px; }
+    .source-badge { bottom: 10px; left: 14px; font-size: 0.55rem; padding: 3px 10px; }
+    footer { font-size: 0.72rem; margin-top: 38px; padding: 20px 0 10px; }
+    .section-title { font-size: 0.9rem; margin-bottom: 12px; }
+    .forecast-section { margin-top: 24px; }
+    .weekly-section { margin: 20px 0; }
   }
 
   @media (max-width: 360px) {
     @supports(padding:max(0px)) {
-      .container { padding: 10px max(10px, env(safe-area-inset-left)) 32px max(10px, env(safe-area-inset-right)); }
+      .container { padding: 12px max(12px, env(safe-area-inset-left)) 36px max(12px, env(safe-area-inset-right)); }
     }
-    .container { padding: 10px 10px 32px; }
+    .container { padding: 12px 12px 36px; }
+    header { padding: 20px 0 6px; }
     header h1 { font-size: 1.2rem; }
     header p { font-size: 0.75rem; }
-    .weekly-card { padding: 12px 6px 10px; }
+    .weekly-card { padding: 12px 8px 10px; }
     .weekly-strip { gap: 3px; }
     .weekly-col { padding: 6px 2px 6px; max-width: none; }
     .weekly-col .w-today-tag { font-size: 0.34rem; padding: 0 5px; margin-bottom: 2px; }
@@ -1744,7 +1756,7 @@ HTML_PAGE = """<!DOCTYPE html>
     .weekly-col .w-status { font-size: 0.45rem; padding: 1px 5px; }
     .weekly-col .w-status.open::before,
     .weekly-col .w-status.closed::before { width: 3px; height: 3px; font-size: 0.34rem; }
-    .time-bar { font-size: 0.85rem; gap: 5px; padding: 8px 10px; }
+    .time-bar { font-size: 0.85rem; gap: 6px; padding: 8px 12px; margin: 14px auto 20px; }
     #clock-display { font-size: 0.85rem; }
     #date-display { font-size: 0.68rem; }
     .gauge-card { padding: 22px 14px 20px; }
@@ -1752,23 +1764,27 @@ HTML_PAGE = """<!DOCTYPE html>
     .gauge-ring svg { width: 130px; height: 130px; }
     .gauge-label .pct { font-size: 2rem; }
     .gauge-label .pct-label { font-size: 0.8rem; }
-    .gauge-status-badge { top: 10px; right: 10px; padding: 4px 10px; font-size: 0.65rem; min-height: 30px; }
-    .source-badge { bottom: 8px; left: 12px; font-size: 0.55rem; padding: 3px 8px; }
-    .info-item { padding: 10px 12px; min-height: 44px; }
+    .gauge-status-badge { top: 8px; right: 10px; padding: 4px 10px; font-size: 0.62rem; min-height: 28px; }
+    .source-badge { bottom: 8px; left: 12px; font-size: 0.52rem; padding: 3px 8px; }
+    .info-item { padding: 12px 14px; min-height: 44px; }
     .info-item .value { font-size: 0.8rem; }
-    .hours-combined { padding: 6px 10px; gap: 6px; }
+    .hours-combined { padding: 8px 12px; gap: 8px; }
     .hours-label { font-size: 0.55rem; }
     .hours-value { font-size: 0.65rem; }
     .hours-divider { height: 14px; }
     .info-item .label { font-size: 0.63rem; }
-    .gender-rates { padding: 12px 14px; gap: 10px; }
+    .gender-rates { padding: 12px 14px; gap: 10px; margin: 16px auto 0; }
     .gender-bar-track { height: 12px; }
     .gender-row { gap: 8px; min-height: 34px; }
     .gender-icon { font-size: 0.9rem; }
     .gender-label { font-size: 0.7rem; width: 34px; }
     .gender-value { font-size: 0.75rem; width: 36px; }
-    .section-title { font-size: 0.85rem; }
-    .forecast-item { min-width: 62px; padding: 6px 3px 8px; min-height: 76px; }
+    .section-title { font-size: 0.85rem; margin-bottom: 10px; }
+    .weekly-section { margin: 16px 0; }
+    .forecast-section { margin-top: 20px; }
+    .gauge-tip { font-size: 0.8rem; padding: 12px 14px; margin-top: 14px; }
+    footer { font-size: 0.7rem; margin-top: 32px; padding: 16px 0 8px; }
+    .forecast-item { min-width: 62px; padding: 8px 3px 8px; min-height: 76px; }
     .forecast-item .hour { font-size: 0.6rem; margin-bottom: 4px; }
     .forecast-item .bar { width: 14px; }
     .forecast-item .bar-wrap { height: 34px; margin-bottom: 3px; }
@@ -1903,7 +1919,7 @@ HTML_PAGE = """<!DOCTYPE html>
     <!-- Weekly schedule (single strip) -->
     <div class="weekly-section animate-in animate-in-delay-4">
       <div class="section-title">
-        <span>📅</span> 1주일 운영 현황
+        <span>📅</span> 주간 운영 현황
       </div>
       <div class="weekly-card glass-card" id="weekly-card">
         <!-- Filled by JS -->
