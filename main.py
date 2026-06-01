@@ -2082,13 +2082,30 @@ function setGenderRates(male, female) {
   animateBar(femaleBar, Math.min(female, 100));
 }
 
-// ── Trend chart (mini, integrated with forecast) ─────────────────────────────
+// ── Trend chart (mini, responsive canvas) ────────────────────────────────
+function resizeTrendCanvas() {
+  const canvas = document.getElementById('trend-canvas');
+  if (!canvas) return;
+  const container = canvas.parentElement;
+  const w = container.clientWidth;
+  const h = container.clientHeight;
+  if (canvas.width !== w || canvas.height !== h) {
+    canvas.width = w;
+    canvas.height = h;
+  }
+}
+
 function renderTrendChart(trend) {
   const canvas = document.getElementById('trend-canvas');
   if (!canvas) return;
+
+  // Resize canvas to match container dimensions
+  resizeTrendCanvas();
+
   const ctx = canvas.getContext('2d');
   const w = canvas.width;
   const h = canvas.height;
+  if (w === 0 || h === 0) return;
 
   ctx.clearRect(0, 0, w, h);
 
@@ -2102,7 +2119,10 @@ function renderTrendChart(trend) {
     return;
   }
 
-  const pad = { top: 6, bottom: 4, left: 4, right: 4 };
+  // Responsive padding & sizes proportional to canvas height
+  const baseH = 60;
+  const scale = h / baseH;
+  const pad = { top: 6 * scale, bottom: 4 * scale, left: 4 * scale, right: 4 * scale };
   const chartW = w - pad.left - pad.right;
   const chartH = h - pad.top - pad.bottom;
   const maxLevel = 100;
@@ -2159,7 +2179,6 @@ function renderTrendChart(trend) {
   points.forEach((p, i) => {
     const isPast = i <= nowIdx;
     const isNow = i === nowIdx;
-    const alpha = isPast ? 0.5 : 1;
 
     // Glow for current time
     if (isNow) {
@@ -2392,6 +2411,7 @@ async function fetchData() {
     document.getElementById('weekend-hours').textContent = p.weekend_hours;
 
     // Trend chart (from embedded trend data)
+    _lastTrendData = data.trend;
     renderTrendChart(data.trend);
 
     // Forecast
@@ -2404,6 +2424,18 @@ async function fetchData() {
     document.getElementById('error-msg').textContent = err.message;
   }
 }
+
+// ── Trend cache for resize re-rendering ──────────────────────────────────────
+let _lastTrendData = null;
+
+// ── Debounced resize handler for responsive canvas ──────────────────────────
+let _resizeTimer = null;
+window.addEventListener('resize', () => {
+  if (_resizeTimer) clearTimeout(_resizeTimer);
+  _resizeTimer = setTimeout(() => {
+    if (_lastTrendData) renderTrendChart(_lastTrendData);
+  }, 200);
+});
 
 // ── Init ─────────────────────────────────────────────────────────────────────
 
