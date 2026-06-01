@@ -1372,130 +1372,136 @@ HTML_PAGE = """<!DOCTYPE html>
     letter-spacing: -0.2px;
   }
 
-  /* ── Weekly schedule (compact) ────────────────────────── */
+  /* ── Weekly schedule (unified strip) ─────────────────── */
   .weekly-section { margin: 24px 0; }
-  .weekly-grid {
-    display: grid;
-    grid-template-columns: repeat(7, 1fr);
-    gap: 6px;
+  .weekly-card {
+    padding: 20px 16px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
   }
-  .weekly-item {
-    background: var(--card);
-    border: 1px solid var(--card-border);
-    border-radius: var(--radius-xs);
-    padding: 8px 4px 6px;
-    text-align: center;
-    transition: transform var(--transition), background var(--transition), box-shadow var(--transition);
-    position: relative;
-    overflow: hidden;
-    animation: scale-in 0.5s var(--bounce) both;
-    cursor: default;
-  }
-  .weekly-item::before {
+  .weekly-card::before {
     content: '';
     position: absolute;
-    top: 0; left: 0;
-    width: 100%; height: 1.5px;
-    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    inset: 0;
+    border-radius: inherit;
+    background: radial-gradient(circle at 30% 0%, var(--card-glow) 0%, transparent 70%);
+    pointer-events: none;
     opacity: 0;
-    transition: opacity 0.4s;
+    transition: opacity 0.6s;
   }
-  .weekly-item:hover {
-    background: var(--card-hover);
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-  }
-  .weekly-item:hover::before { opacity: 0.35; }
-  .weekly-item.today {
-    border-color: rgba(56, 189, 248, 0.15);
-    background: rgba(56, 189, 248, 0.06);
-  }
-  .weekly-item.today::before { opacity: 0.5; }
-  .weekly-item.closed-day {
-    opacity: 0.5;
-  }
-  .weekly-item.closed-day .weekly-day { color: #a78bfa; }
+  .weekly-card:hover::before { opacity: 1; }
 
-  /* Top row: day + date inline */
-  .weekly-top {
+  /* Strip row: all 7 days in one horizontal bar */
+  .weekly-strip {
     display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 4px;
-    margin-bottom: 4px;
+    gap: 0;
+    border-radius: var(--radius-xs);
+    overflow: hidden;
+    background: rgba(0, 0, 0, 0.15);
+    position: relative;
   }
-  .weekly-top .weekly-day {
+  .weekly-col {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 10px 4px 8px;
+    position: relative;
+    transition: background 0.3s;
+    cursor: default;
+    border-right: 1px solid rgba(56, 189, 248, 0.04);
+  }
+  .weekly-col:last-child { border-right: none; }
+  .weekly-col:hover {
+    background: rgba(56, 189, 248, 0.04);
+  }
+
+  /* Today column highlight */
+  .weekly-col.today {
+    background: rgba(56, 189, 248, 0.06);
+    box-shadow: inset 0 0 0 1px rgba(56, 189, 248, 0.12);
+  }
+
+  /* Day header */
+  .weekly-col .w-day {
     font-size: 0.72rem;
     font-weight: 700;
     color: var(--text-dim);
     letter-spacing: 0.3px;
+    margin-bottom: 1px;
   }
-  .weekly-item.today .weekly-day {
-    color: var(--accent);
-    font-size: 0.78rem;
-  }
-  .weekly-top .weekly-date {
-    font-size: 0.55rem;
-    color: rgba(126, 147, 176, 0.45);
+  .weekly-col .w-date {
+    font-size: 0.52rem;
+    color: rgba(126, 147, 176, 0.4);
     font-weight: 400;
+    margin-bottom: 6px;
   }
-  .weekly-item.today .weekly-date { color: rgba(56, 189, 248, 0.6); }
+  .weekly-col.today .w-day { color: var(--accent); font-size: 0.78rem; }
+  .weekly-col.today .w-date { color: rgba(56, 189, 248, 0.5); }
+  .weekly-col.closed-day .w-day { color: #a78bfa; }
+  .weekly-col.closed-day .w-date { color: rgba(167, 139, 250, 0.3); }
 
-  /* Today dot indicator */
-  .weekly-today-dot {
+  /* Today tag pill */
+  .weekly-col .w-today-tag {
     display: inline-block;
-    width: 5px; height: 5px;
-    border-radius: 50%;
-    background: var(--accent);
-    box-shadow: 0 0 6px rgba(56, 189, 248, 0.5);
-    animation: pulse-dot 1.8s ease-in-out infinite;
+    padding: 1px 8px;
+    border-radius: 8px;
+    font-size: 0.48rem;
+    font-weight: 700;
+    background: linear-gradient(135deg, var(--accent), #22d3ee);
+    color: var(--bg-deep);
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
   }
 
-  /* Bar */
-  .weekly-item .weekly-bar-wrap {
-    height: 20px;
+  /* Bar strip area */
+  .weekly-col .w-bar-area {
+    height: 40px;
+    width: 100%;
     display: flex;
     align-items: flex-end;
     justify-content: center;
-    margin-bottom: 4px;
-    overflow: hidden;
+    margin-bottom: 5px;
+    position: relative;
   }
-  .weekly-item .weekly-bar {
-    width: 14px;
+  .weekly-col .w-bar {
+    width: 60%;
+    max-width: 24px;
+    min-width: 10px;
     border-radius: 3px 3px 1px 1px;
     min-height: 2px;
     transition: height 0.8s var(--bounce);
     position: relative;
   }
-  .weekly-item .weekly-bar::after {
+  .weekly-col .w-bar::after {
     content: '';
     position: absolute;
     inset: 0;
     border-radius: inherit;
-    background: linear-gradient(to top, transparent 40%, rgba(255,255,255,0.15) 100%);
+    background: linear-gradient(to top, transparent 35%, rgba(255,255,255,0.18) 100%);
     pointer-events: none;
   }
+  .weekly-col.closed-day .w-bar { background: #8b5cf6 !important; opacity: 0.5; }
 
-  /* Bottom row: hours + status inline */
-  .weekly-bottom {
+  /* Bottom info */
+  .weekly-col .w-info {
+    font-size: 0.55rem;
     display: flex;
     align-items: center;
-    justify-content: center;
     gap: 3px;
-  }
-  .weekly-bottom .weekly-hours {
-    font-size: 0.55rem;
-    color: var(--text-dim);
-    font-weight: 500;
     line-height: 1.1;
   }
-  .weekly-bottom .weekly-status {
-    font-size: 0.58rem;
+  .weekly-col .w-hours {
+    color: var(--text-dim);
+    font-weight: 500;
+  }
+  .weekly-col .w-status {
     font-weight: 700;
     letter-spacing: -0.2px;
   }
-  .weekly-bottom .weekly-status.open { color: #4ade80; }
-  .weekly-bottom .weekly-status.closed { color: #a78bfa; }
+  .weekly-col .w-status.open { color: #4ade80; }
+  .weekly-col .w-status.closed { color: #a78bfa; }
 
   /* ── Scroll hint ───────────────────────────────────── */
   .scroll-hint {
@@ -1596,17 +1602,14 @@ HTML_PAGE = """<!DOCTYPE html>
     }
     .container { padding: 14px 14px 36px; }
     header h1 { font-size: 1.4rem; }
-    .weekly-grid { gap: 5px; }
-    .weekly-item { padding: 6px 3px 5px; border-radius: 8px; }
-    .weekly-top { gap: 3px; margin-bottom: 3px; }
-    .weekly-top .weekly-day { font-size: 0.65rem; }
-    .weekly-item.today .weekly-day { font-size: 0.7rem; }
-    .weekly-top .weekly-date { font-size: 0.5rem; }
-    .weekly-item .weekly-bar { width: 12px; }
-    .weekly-item .weekly-bar-wrap { height: 16px; margin-bottom: 3px; }
-    .weekly-bottom { gap: 2px; }
-    .weekly-bottom .weekly-hours { font-size: 0.5rem; }
-    .weekly-bottom .weekly-status { font-size: 0.52rem; }
+    .weekly-card { padding: 16px 10px 12px; gap: 10px; }
+    .weekly-col { padding: 8px 3px 6px; }
+    .weekly-col .w-day { font-size: 0.65rem; }
+    .weekly-col .w-date { font-size: 0.48rem; margin-bottom: 4px; }
+    .weekly-col.today .w-day { font-size: 0.7rem; }
+    .weekly-col .w-bar-area { height: 32px; margin-bottom: 4px; }
+    .weekly-col .w-bar { width: 55%; max-width: 18px; min-width: 8px; }
+    .weekly-col .w-info { font-size: 0.5rem; gap: 2px; }
     header::after { width: 40px; }
     .time-bar {
       padding: 10px 16px;
@@ -1688,17 +1691,15 @@ HTML_PAGE = """<!DOCTYPE html>
 
   @media (max-width: 420px) {
     .info-grid { grid-template-columns: 1fr; }
-    .weekly-grid { gap: 4px; }
-    .weekly-item { padding: 5px 2px 4px; border-radius: 6px; }
-    .weekly-top { gap: 2px; margin-bottom: 2px; }
-    .weekly-top .weekly-day { font-size: 0.6rem; }
-    .weekly-item.today .weekly-day { font-size: 0.65rem; }
-    .weekly-top .weekly-date { font-size: 0.45rem; }
-    .weekly-item .weekly-bar { width: 10px; }
-    .weekly-item .weekly-bar-wrap { height: 14px; margin-bottom: 2px; }
-    .weekly-bottom { gap: 2px; }
-    .weekly-bottom .weekly-hours { font-size: 0.45rem; }
-    .weekly-bottom .weekly-status { font-size: 0.48rem; }
+    .weekly-card { padding: 14px 8px 10px; gap: 8px; }
+    .weekly-col { padding: 6px 2px 5px; }
+    .weekly-col .w-day { font-size: 0.6rem; }
+    .weekly-col .w-date { font-size: 0.42rem; margin-bottom: 3px; }
+    .weekly-col.today .w-day { font-size: 0.65rem; }
+    .weekly-col .w-today-tag { font-size: 0.42rem; padding: 1px 6px; }
+    .weekly-col .w-bar-area { height: 26px; margin-bottom: 3px; }
+    .weekly-col .w-bar { width: 50%; max-width: 14px; min-width: 6px; }
+    .weekly-col .w-info { font-size: 0.45rem; gap: 1px; }
     .gender-rates { max-width: 100%; }
     .time-bar { flex-wrap: wrap; justify-content: center; gap: 6px; padding: 10px 12px; }
     .gauge-ring { width: 150px; height: 150px; }
@@ -1716,17 +1717,15 @@ HTML_PAGE = """<!DOCTYPE html>
     .container { padding: 10px 10px 32px; }
     header h1 { font-size: 1.2rem; }
     header p { font-size: 0.75rem; }
-    .weekly-grid { gap: 3px; }
-    .weekly-item { padding: 4px 2px 3px; border-radius: 5px; }
-    .weekly-top { gap: 2px; margin-bottom: 2px; }
-    .weekly-top .weekly-day { font-size: 0.55rem; }
-    .weekly-item.today .weekly-day { font-size: 0.6rem; }
-    .weekly-top .weekly-date { font-size: 0.4rem; }
-    .weekly-item .weekly-bar { width: 8px; }
-    .weekly-item .weekly-bar-wrap { height: 12px; margin-bottom: 2px; }
-    .weekly-bottom { gap: 1px; }
-    .weekly-bottom .weekly-hours { font-size: 0.4rem; }
-    .weekly-bottom .weekly-status { font-size: 0.42rem; }
+    .weekly-card { padding: 12px 6px 8px; gap: 6px; }
+    .weekly-col { padding: 5px 1px 4px; }
+    .weekly-col .w-day { font-size: 0.55rem; }
+    .weekly-col .w-date { font-size: 0.38rem; margin-bottom: 2px; }
+    .weekly-col.today .w-day { font-size: 0.6rem; }
+    .weekly-col .w-today-tag { font-size: 0.38rem; padding: 0 5px; }
+    .weekly-col .w-bar-area { height: 22px; margin-bottom: 2px; }
+    .weekly-col .w-bar { width: 48%; max-width: 10px; min-width: 4px; }
+    .weekly-col .w-info { font-size: 0.4rem; gap: 1px; }
     .time-bar { font-size: 0.85rem; gap: 5px; padding: 8px 10px; }
     #clock-display { font-size: 0.85rem; }
     #date-display { font-size: 0.68rem; }
@@ -1880,12 +1879,12 @@ HTML_PAGE = """<!DOCTYPE html>
       </div>
     </div>
 
-    <!-- Weekly schedule -->
+    <!-- Weekly schedule (single strip) -->
     <div class="weekly-section animate-in animate-in-delay-4">
       <div class="section-title">
         <span>📅</span> 1주일 운영 현황
       </div>
-      <div class="weekly-grid" id="weekly-grid">
+      <div class="weekly-card glass-card" id="weekly-card">
         <!-- Filled by JS -->
       </div>
     </div>
@@ -2206,49 +2205,50 @@ function renderForecast(forecast) {
   });
 
   document.getElementById('forecast-count').textContent = `${forecast.length}시간`;
-}  // ── Weekly schedule renderer (compact) ──────────────────────────────────────
+}  // ── Weekly schedule renderer (unified strip) ───────────────────────────────
 function renderWeeklySchedule(schedule) {
-  const grid = document.getElementById('weekly-grid');
-  grid.innerHTML = '';
+  const card = document.getElementById('weekly-card');
+  // Build a unified strip containing all 7 days
+  const strip = document.createElement('div');
+  strip.className = 'weekly-strip';
 
   schedule.forEach((d, i) => {
-    const div = document.createElement('div');
-    div.className = 'weekly-item';
-    if (d.is_today) div.classList.add('today');
-    if (d.is_closed) div.classList.add('closed-day');
-    div.style.animationDelay = `${i * 0.05}s`;
+    const col = document.createElement('div');
+    col.className = 'weekly-col';
+    if (d.is_today) col.classList.add('today');
+    if (d.is_closed) col.classList.add('closed-day');
+    col.style.animationDelay = `${i * 0.05}s`;
 
-    const barHeight = d.is_closed ? 2 : Math.max(2, d.peak_level * 0.16 + 2);
-    const statusClass = d.is_closed ? 'closed' : 'open';
-    const statusText = d.is_closed ? '휴장' : '운영';
+    const barHeight = d.is_closed ? 2 : Math.max(2, d.peak_level * 0.28 + 2);
     const barColor = d.is_closed ? '#8b5cf6' : d.peak_color;
-
-    // Compact hours: "06:00~20:00" → "06~20"
     const compactHours = d.hours.replace(/:00/g, '');
 
-    div.innerHTML = `
-      <div class="weekly-top">
-        <span class="weekly-day">${d.day_name}</span>
-        <span class="weekly-date">${d.date}</span>
-        ${d.is_today ? '<span class="weekly-today-dot"></span>' : ''}
+    col.innerHTML = `
+      ${d.is_today ? '<div class="w-today-tag">TODAY</div>' : ''}
+      <div class="w-day">${d.day_name}</div>
+      <div class="w-date">${d.date}</div>
+      <div class="w-bar-area">
+        <div class="w-bar" style="height:2px;background:${barColor}"></div>
       </div>
-      <div class="weekly-bar-wrap">
-        <div class="weekly-bar" style="height:2px;background:${barColor}"></div>
-      </div>
-      <div class="weekly-bottom">
+      <div class="w-info">
         ${d.is_closed
-          ? '<span class="weekly-hours" style="color:#a78bfa">휴장</span>'
-          : '<span class="weekly-hours">' + compactHours + '</span><span class="weekly-status open">' + statusText + '</span>'
+          ? '<span class="w-status closed">휴장</span>'
+          : '<span class="w-hours">' + compactHours + '</span><span class="w-status open">운영</span>'
         }
       </div>
     `;
-    grid.appendChild(div);
+
+    strip.appendChild(col);
 
     requestAnimationFrame(() => {
-      const bar = div.querySelector('.weekly-bar');
-      if (bar) bar.style.height = barHeight + 'px';
+      const bar = col.querySelector('.w-bar');
+      if (bar) bar.style.height = Math.min(barHeight, col.querySelector('.w-bar-area').offsetHeight - 2) + 'px';
     });
   });
+
+  // Replace card content
+  card.innerHTML = '';
+  card.appendChild(strip);
 }
 
 // ── Fetch weekly schedule ───────────────────────────────────────────────────
