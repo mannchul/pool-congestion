@@ -25,7 +25,7 @@ POOL_INFO = {
     "weekday_hours": "06:00 ~ 20:00 (수질정화시간 12:00~13:00)",
     "saturday_hours": "06:00 ~ 17:00",
     "sunday_holiday_hours": "10:00 ~ 17:00",
-    "weekend_hours": "토요일 06:00~17:00 / 일요일·공휴일 10:00~17:00",
+    "weekend_hours": "토 06:00~17:00 / 일·공휴일 10:00~17:00",
     "break_time": "12:00~13:00 (평일)",
     "closed_days": "매월 첫째·셋째 주 일요일 / 설날·추석",
     "pool_size": "25m 6레인",
@@ -1221,38 +1221,42 @@ HTML_PAGE = """<!DOCTYPE html>
   }
   .info-item .value.highlight { color: var(--accent); }
 
-  /* ── Combined hours card ────────────────────────────── */
+  /* ── Combined hours card (compact) ──────────────────── */
   .hours-combined {
     display: flex;
     flex-direction: row;
     align-items: center;
-    gap: 16px;
-    padding: 14px 22px;
+    gap: 10px;
+    padding: 10px 16px;
   }
   .hours-row {
     flex: 1;
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
     align-items: center;
-    gap: 4px;
+    gap: 2px;
   }
   .hours-label {
-    font-size: 0.72rem;
+    font-size: 0.62rem;
     font-weight: 600;
     color: var(--text-dim);
-    letter-spacing: 0.5px;
+    letter-spacing: 0.3px;
+    white-space: nowrap;
   }
   .hours-value {
-    font-size: 0.88rem;
+    font-size: 0.72rem;
     font-weight: 500;
     color: var(--text-bright);
-    text-align: center;
-    line-height: 1.4;
+    text-align: left;
+    line-height: 1.3;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .hours-divider {
     width: 1px;
-    height: 40px;
-    background: linear-gradient(to bottom, transparent, rgba(56, 189, 248, 0.12), transparent);
+    height: 20px;
+    background: linear-gradient(to bottom, transparent, rgba(56, 189, 248, 0.15), transparent);
     flex-shrink: 0;
   }
 
@@ -1662,8 +1666,12 @@ HTML_PAGE = """<!DOCTYPE html>
       font-size: 0.58rem;
     }
     .info-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
-    .info-item { padding: 16px 18px; min-height: 60px; }
-    .info-item .value { font-size: 0.88rem; }
+    .info-item { padding: 14px 16px; min-height: 52px; }
+    .info-item .value { font-size: 0.85rem; }
+    .hours-combined { padding: 8px 14px; gap: 8px; }
+    .hours-label { font-size: 0.58rem; }
+    .hours-value { font-size: 0.68rem; }
+    .hours-divider { height: 16px; }
     .gender-rates { padding: 16px 18px; gap: 14px; }
     .gender-bar-track { height: 14px; }
     .gender-row { gap: 10px; min-height: 40px; }
@@ -1762,8 +1770,12 @@ HTML_PAGE = """<!DOCTYPE html>
     .gauge-label .pct-label { font-size: 0.8rem; }
     .gauge-status-badge { top: 10px; right: 10px; padding: 4px 10px; font-size: 0.65rem; min-height: 30px; }
     .source-badge { bottom: 8px; left: 12px; font-size: 0.55rem; padding: 3px 8px; }
-    .info-item { padding: 12px 14px; min-height: 50px; }
-    .info-item .value { font-size: 0.82rem; }
+    .info-item { padding: 10px 12px; min-height: 44px; }
+    .info-item .value { font-size: 0.8rem; }
+    .hours-combined { padding: 6px 10px; gap: 6px; }
+    .hours-label { font-size: 0.55rem; }
+    .hours-value { font-size: 0.65rem; }
+    .hours-divider { height: 14px; }
     .info-item .label { font-size: 0.63rem; }
     .gender-rates { padding: 12px 14px; gap: 10px; }
     .gender-bar-track { height: 12px; }
@@ -1894,12 +1906,12 @@ HTML_PAGE = """<!DOCTYPE html>
     <div class="info-grid animate-in animate-in-delay-3">
       <div class="info-item hours-combined" id="hours-card">
         <div class="hours-row">
-          <span class="hours-label">🕐 평일</span>
+          <span class="hours-label">🕐</span>
           <span class="hours-value" id="weekday-hours">--</span>
         </div>
         <div class="hours-divider"></div>
         <div class="hours-row">
-          <span class="hours-label">🕐 주말</span>
+          <span class="hours-label">🕐</span>
           <span class="hours-value" id="weekend-hours">--</span>
         </div>
       </div>
