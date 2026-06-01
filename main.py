@@ -1302,20 +1302,20 @@ HTML_PAGE = """<!DOCTYPE html>
 
   .forecast-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
-    gap: 10px;
+    grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+    gap: 8px;
   }
   .forecast-item {
     background: var(--card);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     border: 1px solid var(--card-border);
-    border-radius: var(--radius-sm);
-    padding: 14px 6px 12px;
+    border-radius: var(--radius-xs);
+    padding: 10px 4px 10px;
     text-align: center;
     transition: transform var(--transition), background var(--transition), box-shadow var(--transition), border-color var(--transition);
     cursor: default;
-    animation: scale-in 0.5s var(--bounce) both;
+    animation: scale-in 0.4s var(--bounce) both;
     flex-shrink: 0;
     position: relative;
     overflow: hidden;
@@ -1324,37 +1324,38 @@ HTML_PAGE = """<!DOCTYPE html>
     content: '';
     position: absolute;
     top: 0; left: 0;
-    width: 100%; height: 2px;
+    width: 100%; height: 1px;
     background: linear-gradient(90deg, transparent, var(--accent), transparent);
     opacity: 0;
-    transition: opacity 0.4s;
+    transition: opacity 0.3s;
   }
   .forecast-item:hover {
     background: var(--card-hover);
-    transform: translateY(-5px) scale(1.04);
-    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
+    transform: translateY(-3px) scale(1.02);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
     border-color: rgba(56, 189, 248, 0.08);
   }
-  .forecast-item:hover::before { opacity: 0.4; }
+  .forecast-item:hover::before { opacity: 0.3; }
   .forecast-item .hour {
-    font-size: 0.76rem;
+    font-size: 0.7rem;
     color: var(--text-dim);
-    margin-bottom: 10px;
+    margin-bottom: 6px;
     font-weight: 500;
-    letter-spacing: 0.3px;
+    letter-spacing: 0.2px;
   }
   .forecast-item .bar-wrap {
-    height: 56px;
+    height: 44px;
     display: flex;
     align-items: flex-end;
     justify-content: center;
-    margin-bottom: 8px;
+    margin-bottom: 5px;
+    overflow: hidden;
   }
   .forecast-item .bar {
-    width: 24px;
-    border-radius: 6px 6px 3px 3px;
-    min-height: 3px;
-    transition: height 1s var(--bounce), background 0.3s;
+    width: 18px;
+    border-radius: 4px 4px 2px 2px;
+    min-height: 2px;
+    transition: height 0.9s var(--bounce), background 0.3s;
     position: relative;
   }
   .forecast-item .bar::after {
@@ -1368,18 +1369,18 @@ HTML_PAGE = """<!DOCTYPE html>
   .forecast-item .bar::before {
     content: '';
     position: absolute;
-    top: -2px; left: -3px;
-    right: -3px; height: 6px;
-    border-radius: 4px;
+    top: -1px; left: -2px;
+    right: -2px; height: 4px;
+    border-radius: 3px;
     background: inherit;
-    filter: blur(4px);
-    opacity: 0.6;
+    filter: blur(3px);
+    opacity: 0.5;
     pointer-events: none;
   }
   .forecast-item .f-label {
-    font-size: 0.72rem;
+    font-size: 0.68rem;
     font-weight: 700;
-    letter-spacing: -0.2px;
+    letter-spacing: -0.1px;
   }
 
   /* ── Weekly schedule (calendar design) ──────────────── */
@@ -1696,9 +1697,9 @@ HTML_PAGE = """<!DOCTYPE html>
     }
     .forecast-scroll-wrap .forecast-item {
       scroll-snap-align: start;
-      min-width: 80px;
-      padding: 12px 6px 12px;
-      min-height: 100px;
+      min-width: 72px;
+      padding: 8px 4px 8px;
+      min-height: 82px;
       display: flex;
       flex-direction: column;
       justify-content: center;
@@ -1706,18 +1707,18 @@ HTML_PAGE = """<!DOCTYPE html>
     .forecast-scroll-wrap .forecast-item:last-child { scroll-snap-align: end; }
     @media (hover: hover) {
       .forecast-scroll-wrap .forecast-item:hover {
-        transform: translateY(-4px) scale(1.06);
+        transform: translateY(-3px) scale(1.04);
       }
     }
     .scroll-hint { display: block; }
 
-    .forecast-item .bar { width: 20px; }
-    .forecast-item .bar-wrap { height: 48px; }
-    .forecast-item .hour { font-size: 0.72rem; }
-    .forecast-item .f-label { font-size: 0.7rem; }
+    .forecast-item .bar { width: 16px; }
+    .forecast-item .bar-wrap { height: 38px; }
+    .forecast-item .hour { font-size: 0.68rem; }
+    .forecast-item .f-label { font-size: 0.66rem; }
     .forecast-item .bar::before {
-      top: -3px; left: -4px;
-      right: -4px; height: 8px;
+      top: -2px; left: -3px;
+      right: -3px; height: 5px;
     }
   }
 
@@ -1784,11 +1785,11 @@ HTML_PAGE = """<!DOCTYPE html>
     .gender-label { font-size: 0.7rem; width: 34px; }
     .gender-value { font-size: 0.75rem; width: 36px; }
     .section-title { font-size: 0.85rem; }
-    .forecast-item { min-width: 68px; padding: 8px 4px 10px; min-height: 88px; }
-    .forecast-item .hour { font-size: 0.65rem; }
-    .forecast-item .bar { width: 16px; }
-    .forecast-item .bar-wrap { height: 40px; }
-    .forecast-item .f-label { font-size: 0.62rem; }
+    .forecast-item { min-width: 62px; padding: 6px 3px 8px; min-height: 76px; }
+    .forecast-item .hour { font-size: 0.6rem; margin-bottom: 4px; }
+    .forecast-item .bar { width: 14px; }
+    .forecast-item .bar-wrap { height: 34px; margin-bottom: 3px; }
+    .forecast-item .f-label { font-size: 0.58rem; }
     .forecast-trend { height: 42px; margin-bottom: 12px; }
     .error-state .retry-btn { padding: 10px 24px; font-size: 0.82rem; }
     .loading { padding: 60px 14px; }
@@ -2259,7 +2260,7 @@ function renderForecast(forecast) {
     requestAnimationFrame(() => {
       const bar = div.querySelector('.bar');
       if (bar) {
-        bar.style.height = `${f.level * 0.48 + 4}px`;
+        bar.style.height = `${f.level * 0.36 + 4}px`;
       }
     });
   });
