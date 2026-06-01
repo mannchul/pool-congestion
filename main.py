@@ -336,36 +336,47 @@ def _chart_to_levels(chart_data: dict, now: datetime) -> dict | None:
 
 
 def _build_historical_predictions(hist_data: dict, now: datetime) -> dict | None:
-    """Build congestion predictions using historical (last_week) data.
+    """Build congestion predictions using historical data for the SAME day type.
 
-    Uses the 'last_week' column (same day of week) as the primary
-    pattern source, calibrated against today's observed utilization.
-    Falls back to 'yesterday' data if last_week is unavailable.
+    Day type matching logic:
+    - Weekday (Mon-Fri): uses 'last_week' (same weekday) → "same weekday"
+    - Saturday: uses 'last_week' (last Saturday) → "same weekend day"
+    - Sunday: uses 'last_week' (last Sunday) → "same weekend day"
+    - Holiday: returns None (no matching historical data available)
+
+    Falls back to 'yesterday', then 'today' data when primary source is empty.
+    Calibrates historical user counts against current observed utilization.
 
     Returns {hour: level} or None.
     """
+    day_type = _get_day_type(now)
     current_hour = now.hour
 
-    # Primary: use last_week (same weekday) data
+    # For holidays, historical matching doesn't work reliably
+    # (last_week would be a regular day, not a holiday)
+    if day_type == "holiday":
+        return None
+
+    # Define column priority based on day type
+    # For all types: last_week (same weekday) > yesterday > today
     last_week_current = hist_data.get(current_hour, {}).get("last_week", 0)
     yesterday_current = hist_data.get(current_hour, {}).get("yesterday", 0)
     today_current = hist_data.get(current_hour, {}).get("today", 0)
 
-    # Determine which data column to use as the pattern
     pattern_source = None
     pattern_key = None
 
-    if last_week_current > 0:
-        pattern_source = last_week_current
-        pattern_key = "last_week"
-    elif yesterday_current > 0:
-        pattern_source = yesterday_current
-        pattern_key = "yesterday"
-    elif today_current > 0:
-        pattern_source = today_current
-        pattern_key = "today"
-    else:
-        # Try previous hours as fallback
+    # Try each column in priority order
+    for col, val in [("last_week", last_week_current),
+                     ("yesterday", yesterday_current),
+                     ("today", today_current)]:
+        if val > 0:
+            pattern_source = val
+            pattern_key = col
+            break
+
+    # Fallback: scan previous hours for ANY non-zero data
+    if not pattern_source:
         for h in range(current_hour - 1, 5, -1):
             for col in ["last_week", "yesterday", "today"]:
                 val = hist_data.get(h, {}).get(col, 0)
@@ -385,7 +396,7 @@ def _build_historical_predictions(hist_data: dict, now: datetime) -> dict | None
 
     current_level = _LIVE_CACHE["level"]
 
-    # Calibration factor
+    # Calibration factor: current utilization / historical source value
     factor = current_level / pattern_source
 
     levels = {}
@@ -398,6 +409,25 @@ def _build_historical_predictions(hist_data: dict, now: datetime) -> dict | None
         levels[hour] = est
 
     return levels if levels else None
+
+
+# ── Day type classification ──────────────────────────────────────────────
+
+def _get_day_type(now: datetime) -> str:
+    """Classify the day into a type for historical matching.
+
+    Returns one of: 'weekday', 'saturday', 'sunday', 'holiday'
+    Used to select appropriate historical data for predictions.
+    """
+    if _is_closed_day(now):
+        return "holiday"
+    weekday = now.weekday()
+    if weekday == 6:
+        return "sunday"
+    elif weekday == 5:
+        return "saturday"
+    else:
+        return "weekday"
 
 
 # ── Congestion estimation logic ─────────────────────────────────────────────
