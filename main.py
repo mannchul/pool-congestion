@@ -27,10 +27,49 @@ POOL_INFO = {
     "sunday_holiday_hours": "10:00 ~ 17:00",
     "weekend_hours": "토요일 06:00~17:00 / 일요일·공휴일 10:00~17:00",
     "break_time": "12:00~13:00 (평일)",
-    "closed_days": "매월 첫째·셋째 주 일요일",
+    "closed_days": "매월 첫째·셋째 주 일요일 / 설날·추석",
     "pool_size": "25m 6레인",
     "features": ["어린이풀", "헬스장", "탁구장"],
 }
+
+
+# ── Holiday / closure detection ────────────────────────────────────────────
+
+# Specific holiday dates (Seollal and Chuseok) - update annually.
+# Format: frozenset of (month, day) tuples.
+_HOLIDAY_DATES: frozenset = frozenset({
+    # 2026
+    (2, 17), (2, 18),  # Seollal (Feb 17-18)
+    (9, 25), (9, 26),  # Chuseok (Sep 25-26)
+    # 2027
+    (2, 6), (2, 7),    # Seollal (Feb 6-7)
+    (9, 14), (9, 15),  # Chuseok (Sep 14-15)
+    # 2028
+    (1, 27), (1, 28),  # Seollal (Jan 27-28)
+    (10, 3), (10, 4),  # Chuseok (Oct 3-4)
+})
+
+
+def _is_closed_day(now: datetime) -> str | None:
+    """Check if today is a closed day.
+
+    Returns a string with the closure reason, or None if open.
+    """
+    month, day = now.month, now.day
+    weekday = now.weekday()  # 0=Mon .. 6=Sun
+
+    # 매월 첫째·셋째 주 일요일 정기휴장
+    if weekday == 6:
+        if day <= 7:
+            return "매월 첫째 주 일요일 정기휴장"
+        if 15 <= day <= 21:
+            return "매월 셋째 주 일요일 정기휴장"
+
+    # 설날 / 추석
+    if (month, day) in _HOLIDAY_DATES:
+        return "설날/추석 휴장"
+
+    return None
 
 
 # ── Real data scraper ──────────────────────────────────────────────────────
@@ -146,8 +185,23 @@ def _estimate_congestion(now: datetime) -> Dict:
       - is_weekend: bool
       - male_rate: estimated male usage rate (%)
       - female_rate: estimated female usage rate (%)
-      - status: "운영중" / "수질정화시간" / "운영종료"
+      - status: "운영중" / "수질정화시간" / "운영종료" / "휴장"
     """
+    # Check closure first
+    closed_reason = _is_closed_day(now)
+    if closed_reason:
+        return {
+            "level": 0,
+            "label": "휴장",
+            "color": "#8b5cf6",
+            "tip": f"🔒 오늘은 {closed_reason}입니다. 수영장을 이용할 수 없습니다.",
+            "day_type": "일요일·공휴일" if now.weekday() == 6 else ("토요일" if now.weekday() == 5 else "평일"),
+            "is_weekend": now.weekday() >= 5,
+            "male_rate": 0,
+            "female_rate": 0,
+            "status": "휴장",
+        }
+
     hour = now.hour + now.minute / 60
     weekday = now.weekday()  # 0=Mon … 6=Sun
 
@@ -254,8 +308,11 @@ def _now_kst() -> datetime:
 def _get_operating_hours(now: datetime) -> tuple[int, int]:
     """Return (start_hour, end_hour) for the given day based on operating hours.
 
-    Returns None for end_hour if the day is closed.
+    Returns (0, 0) if the day is closed.
     """
+    if _is_closed_day(now):
+        return (0, 0)
+
     weekday = now.weekday()
     if weekday == 6:
         return (10, 17)  # Sunday: 10:00~17:00
@@ -267,6 +324,8 @@ def _get_operating_hours(now: datetime) -> tuple[int, int]:
 
 def _hourly_forecast(now: datetime) -> List[Dict]:
     """Generate congestion forecast for operating hours only."""
+    if _is_closed_day(now):
+        return []
     start_hour, end_hour = _get_operating_hours(now)
     base = now.replace(minute=0, second=0, microsecond=0)
     forecasts = []
@@ -290,6 +349,9 @@ def _hourly_forecast(now: datetime) -> List[Dict]:
 
 def _daily_trend(now: datetime) -> List[Dict]:
     """Generate congestion trend data for the full operating day."""
+    if _is_closed_day(now):
+        return []
+
     weekday = now.weekday()
 
     if weekday == 6:
@@ -327,8 +389,12 @@ async def get_congestion():
     """
     now = _now_kst()
 
-    # Try to get live data
-    live = _scrape_live_data()
+    # Check closure first (live data isn't relevant on closed days)
+    closed_reason = _is_closed_day(now)
+    is_closed = closed_reason is not None
+
+    # Try to get live data (skip if closed)
+    live = _scrape_live_data() if not is_closed else None
 
     if live is not None:
         # Use live data for current, but get day_type/is_weekend from heuristic
@@ -348,6 +414,9 @@ async def get_congestion():
     else:
         current = _estimate_congestion(now)
         current["data_source"] = "heuristic"
+
+    current["is_closed"] = is_closed
+    current["closed_reason"] = closed_reason
 
     forecast = _hourly_forecast(now)
     return {
@@ -713,6 +782,53 @@ HTML_PAGE = """<!DOCTYPE html>
     border: 1px solid rgba(148, 163, 184, 0.1);
   }
   .gauge-status-badge.closed .status-dot { background: #94a3b8; animation: none; }
+  .gauge-status-badge.closed-day {
+    background: rgba(139, 92, 246, 0.1);
+    color: #a78bfa;
+    border: 1px solid rgba(139, 92, 246, 0.15);
+  }
+  .gauge-status-badge.closed-day .status-dot { background: #a78bfa; animation: none; }
+
+  /* ── Closure banner ─────────────────────────────── */
+  .closed-banner {
+    display: none;
+    margin-bottom: 22px;
+    padding: 18px 22px;
+    border-radius: var(--radius-sm);
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.08), rgba(99, 102, 241, 0.04));
+    border: 1px solid rgba(139, 92, 246, 0.12);
+    text-align: center;
+    animation: fade-in-up 0.6s var(--transition) both;
+  }
+  .closed-banner .cb-icon {
+    font-size: 2.2rem;
+    display: block;
+    margin-bottom: 8px;
+  }
+  .closed-banner .cb-title {
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: #a78bfa;
+    margin-bottom: 4px;
+    letter-spacing: -0.3px;
+  }
+  .closed-banner .cb-desc {
+    font-size: 0.85rem;
+    color: rgba(167, 139, 250, 0.7);
+    line-height: 1.5;
+  }
+  .closed-banner .cb-closure {
+    margin-top: 10px;
+    padding: 8px 18px;
+    display: inline-block;
+    border-radius: 20px;
+    background: rgba(139, 92, 246, 0.08);
+    border: 1px solid rgba(139, 92, 246, 0.1);
+    font-size: 0.78rem;
+    color: #a78bfa;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+  }
 
   /* ── Gender rates ───────────────────────────────────── */
   .gender-rates {
@@ -1457,6 +1573,14 @@ HTML_PAGE = """<!DOCTYPE html>
       <span class="day-badge" id="day-badge">--</span>
     </div>
 
+    <!-- Closure banner -->
+    <div class="closed-banner" id="closed-banner">
+      <span class="cb-icon">🔒</span>
+      <div class="cb-title">오늘은 휴장일입니다</div>
+      <div class="cb-desc" id="closed-desc">수영장을 이용할 수 없습니다.</div>
+      <div class="cb-closure" id="closed-reason">--</div>
+    </div>
+
     <!-- Main gauge -->
     <div class="gauge-card glass-card animate-in animate-in-delay-2" id="gauge-card">
       <div class="gauge-status-badge" id="status-badge">
@@ -1678,6 +1802,8 @@ function setStatusBadge(status) {
     badge.classList.add('open');
   } else if (status === '수질정화시간') {
     badge.classList.add('break');
+  } else if (status === '휴장') {
+    badge.classList.add('closed-day');
   } else {
     badge.classList.add('closed');
   }
@@ -1893,6 +2019,32 @@ async function fetchData() {
       badge.className = 'day-badge weekday';
     }
 
+    // Closure banner
+    const closedBanner = document.getElementById('closed-banner');
+    const closedReason = document.getElementById('closed-reason');
+    const closedDesc = document.getElementById('closed-desc');
+    if (data.current.is_closed) {
+      closedBanner.style.display = 'block';
+      closedReason.textContent = data.current.closed_reason || '정기휴장';
+      closedDesc.textContent = '오늘은 수영장 휴장일입니다. 운영 시간에 방문해주세요.';
+      // Show status as closed in the gauge
+      document.getElementById('level-pct').textContent = '휴장';
+      document.getElementById('level-pct').style.color = '#8b5cf6';
+      document.getElementById('level-label').textContent = '오늘은 쉬는 날';
+      document.getElementById('level-label').style.color = '#a78bfa';
+      // Hide gender rates on closed days
+      document.querySelector('.gender-rates').style.display = 'none';
+      // Hide tip when closed
+      document.getElementById('tip').style.display = 'none';
+      // Hide source badge
+      document.getElementById('source-badge').style.display = 'none';
+    } else {
+      closedBanner.style.display = 'none';
+      document.querySelector('.gender-rates').style.display = '';
+      document.getElementById('tip').style.display = '';
+      document.getElementById('source-badge').style.display = '';
+    }
+
     // Status badge
     setStatusBadge(data.current.status);
 
@@ -1912,24 +2064,26 @@ async function fetchData() {
     // Gender rates
     setGenderRates(data.current.male_rate, data.current.female_rate);
 
-    // Gauge
-    const c = data.current;
-    const pctEl = document.getElementById('level-pct');
-    const labelEl = document.getElementById('level-label');
+    // Gauge (skip on closed days — closure banner handles display)
+    if (!data.current.is_closed) {
+      const c = data.current;
+      const pctEl = document.getElementById('level-pct');
+      const labelEl = document.getElementById('level-label');
 
-    if (isFirstLoad) {
-      pctEl.textContent = '0%';
-      labelEl.textContent = c.label;
-      labelEl.style.color = c.color;
-      animateNumber(pctEl, c.level, '%', c.color);
-    } else {
-      animateNumber(pctEl, c.level, '%', c.color);
-      labelEl.textContent = c.label;
-      labelEl.style.color = c.color;
+      if (isFirstLoad) {
+        pctEl.textContent = '0%';
+        labelEl.textContent = c.label;
+        labelEl.style.color = c.color;
+        animateNumber(pctEl, c.level, '%', c.color);
+      } else {
+        animateNumber(pctEl, c.level, '%', c.color);
+        labelEl.textContent = c.label;
+        labelEl.style.color = c.color;
+      }
+
+      setGauge(c.level, c.color);
+      document.getElementById('tip').innerHTML = c.tip;
     }
-
-    setGauge(c.level, c.color);
-    document.getElementById('tip').innerHTML = c.tip;
 
     // Pool info
     const p = data.pool;
