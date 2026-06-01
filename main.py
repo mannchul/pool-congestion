@@ -1372,13 +1372,13 @@ HTML_PAGE = """<!DOCTYPE html>
     letter-spacing: -0.2px;
   }
 
-  /* ── Weekly schedule (unified strip) ─────────────────── */
+  /* ── Weekly schedule (calendar design) ──────────────── */
   .weekly-section { margin: 24px 0; }
   .weekly-card {
-    padding: 20px 16px 16px;
+    padding: 22px 20px 18px;
     display: flex;
     flex-direction: column;
-    gap: 14px;
+    gap: 0;
   }
   .weekly-card::before {
     content: '';
@@ -1392,117 +1392,128 @@ HTML_PAGE = """<!DOCTYPE html>
   }
   .weekly-card:hover::before { opacity: 1; }
 
-  /* Strip row: all 7 days in one horizontal bar */
+  /* Calendar row: 7 day cells side by side */
   .weekly-strip {
     display: flex;
-    gap: 0;
-    border-radius: var(--radius-xs);
-    overflow: hidden;
-    background: rgba(0, 0, 0, 0.15);
-    position: relative;
+    gap: 10px;
+    justify-content: center;
   }
+
+  /* Individual day cell — like a calendar page */
   .weekly-col {
     flex: 1;
+    max-width: 110px;
     display: flex;
     flex-direction: column;
     align-items: center;
-    padding: 10px 4px 8px;
+    padding: 14px 6px 12px;
+    background: rgba(0, 0, 0, 0.15);
+    border: 1px solid rgba(56, 189, 248, 0.04);
+    border-radius: var(--radius-xs);
     position: relative;
-    transition: background 0.3s;
+    transition: background 0.3s, border-color 0.3s, transform 0.3s;
     cursor: default;
-    border-right: 1px solid rgba(56, 189, 248, 0.04);
+    animation: scale-in 0.5s var(--bounce) both;
   }
-  .weekly-col:last-child { border-right: none; }
   .weekly-col:hover {
     background: rgba(56, 189, 248, 0.04);
+    border-color: rgba(56, 189, 248, 0.08);
+    transform: translateY(-2px);
   }
 
-  /* Today column highlight */
+  /* Today cell highlight */
   .weekly-col.today {
     background: rgba(56, 189, 248, 0.06);
-    box-shadow: inset 0 0 0 1px rgba(56, 189, 248, 0.12);
+    border-color: rgba(56, 189, 248, 0.2);
+    box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.15), 0 4px 16px rgba(56, 189, 248, 0.06);
   }
 
-  /* Day header */
-  .weekly-col .w-day {
-    font-size: 0.72rem;
-    font-weight: 700;
-    color: var(--text-dim);
-    letter-spacing: 0.3px;
-    margin-bottom: 1px;
+  /* Closed day cell */
+  .weekly-col.closed-day {
+    border-color: rgba(139, 92, 246, 0.1);
+    background: rgba(139, 92, 246, 0.03);
   }
-  .weekly-col .w-date {
-    font-size: 0.52rem;
-    color: rgba(126, 147, 176, 0.4);
-    font-weight: 400;
-    margin-bottom: 6px;
-  }
-  .weekly-col.today .w-day { color: var(--accent); font-size: 0.78rem; }
-  .weekly-col.today .w-date { color: rgba(56, 189, 248, 0.5); }
-  .weekly-col.closed-day .w-day { color: #a78bfa; }
-  .weekly-col.closed-day .w-date { color: rgba(167, 139, 250, 0.3); }
 
-  /* Today tag pill */
+  /* TODAY pill */
   .weekly-col .w-today-tag {
     display: inline-block;
-    padding: 1px 8px;
+    padding: 2px 10px;
     border-radius: 8px;
     font-size: 0.48rem;
-    font-weight: 700;
+    font-weight: 800;
     background: linear-gradient(135deg, var(--accent), #22d3ee);
     color: var(--bg-deep);
-    letter-spacing: 0.5px;
-    margin-bottom: 4px;
+    letter-spacing: 0.3px;
+    margin-bottom: 6px;
+    text-transform: uppercase;
   }
 
-  /* Bar strip area */
-  .weekly-col .w-bar-area {
-    height: 40px;
-    width: 100%;
-    display: flex;
-    align-items: flex-end;
-    justify-content: center;
-    margin-bottom: 5px;
-    position: relative;
-    overflow: hidden;
-  }
-  .weekly-col .w-bar {
-    width: 60%;
-    max-width: 24px;
-    min-width: 10px;
-    border-radius: 3px 3px 1px 1px;
-    min-height: 2px;
-    transition: height 0.8s var(--bounce);
-    position: relative;
-  }
-  .weekly-col .w-bar::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    border-radius: inherit;
-    background: linear-gradient(to top, transparent 35%, rgba(255,255,255,0.18) 100%);
-    pointer-events: none;
-  }
-  .weekly-col.closed-day .w-bar { background: #8b5cf6 !important; opacity: 0.5; }
-
-  /* Bottom info */
-  .weekly-col .w-info {
-    font-size: 0.55rem;
-    display: flex;
-    align-items: center;
-    gap: 3px;
-    line-height: 1.1;
-  }
-  .weekly-col .w-hours {
-    color: var(--text-dim);
-    font-weight: 500;
-  }
-  .weekly-col .w-status {
+  /* Day name (월, 화, 수...) — calendar header */
+  .weekly-col .w-day {
+    font-size: 0.85rem;
     font-weight: 700;
-    letter-spacing: -0.2px;
+    color: var(--text-dim);
+    margin-bottom: 1px;
+    letter-spacing: 0.3px;
   }
-  .weekly-col .w-status.open { color: #4ade80; }
-  .weekly-col .w-status.closed { color: #a78bfa; }
+  .weekly-col.today .w-day { color: var(--accent); }
+  .weekly-col.closed-day .w-day { color: #a78bfa; }
+
+  /* Date (5.20) */
+  .weekly-col .w-date {
+    font-size: 0.55rem;
+    color: rgba(126, 147, 176, 0.4);
+    font-weight: 400;
+    margin-bottom: 10px;
+  }
+  .weekly-col.today .w-date { color: rgba(56, 189, 248, 0.4); }
+  .weekly-col.closed-day .w-date { color: rgba(167, 139, 250, 0.25); }
+
+  /* Operating hours */
+  .weekly-col .w-hours {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--text);
+    letter-spacing: -0.2px;
+    margin-bottom: 8px;
+    font-variant-numeric: tabular-nums;
+  }
+  .weekly-col.today .w-hours { color: var(--text-bright); }
+  .weekly-col.closed-day .w-hours { color: rgba(167, 139, 250, 0.4); }
+
+  /* Status badge (운영 / 휴장) */
+  .weekly-col .w-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 12px;
+    border-radius: 10px;
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+  }
+  .weekly-col .w-status.open {
+    background: rgba(34, 197, 94, 0.08);
+    color: #4ade80;
+    border: 1px solid rgba(34, 197, 94, 0.12);
+  }
+  .weekly-col .w-status.open::before {
+    content: '';
+    display: inline-block;
+    width: 5px; height: 5px;
+    border-radius: 50%;
+    background: #4ade80;
+  }
+  .weekly-col .w-status.closed {
+    background: rgba(139, 92, 246, 0.08);
+    color: #a78bfa;
+    border: 1px solid rgba(139, 92, 246, 0.12);
+  }
+  .weekly-col .w-status.closed::before {
+    content: '✕';
+    font-size: 0.5rem;
+    font-weight: 800;
+  }
 
   /* ── Scroll hint ───────────────────────────────────── */
   .scroll-hint {
@@ -1603,14 +1614,16 @@ HTML_PAGE = """<!DOCTYPE html>
     }
     .container { padding: 14px 14px 36px; }
     header h1 { font-size: 1.4rem; }
-    .weekly-card { padding: 16px 10px 12px; gap: 10px; }
-    .weekly-col { padding: 8px 3px 6px; }
-    .weekly-col .w-day { font-size: 0.65rem; }
-    .weekly-col .w-date { font-size: 0.48rem; margin-bottom: 4px; }
-    .weekly-col.today .w-day { font-size: 0.7rem; }
-    .weekly-col .w-bar-area { height: 32px; margin-bottom: 4px; }
-    .weekly-col .w-bar { width: 55%; max-width: 18px; min-width: 8px; }
-    .weekly-col .w-info { font-size: 0.5rem; gap: 2px; }
+    .weekly-card { padding: 16px 12px 14px; }
+    .weekly-strip { gap: 6px; }
+    .weekly-col { padding: 10px 4px 10px; max-width: none; }
+    .weekly-col .w-today-tag { font-size: 0.42rem; padding: 1px 8px; margin-bottom: 4px; }
+    .weekly-col .w-day { font-size: 0.72rem; }
+    .weekly-col .w-date { font-size: 0.48rem; margin-bottom: 6px; }
+    .weekly-col .w-hours { font-size: 0.65rem; margin-bottom: 6px; }
+    .weekly-col .w-status { font-size: 0.55rem; padding: 2px 8px; }
+    .weekly-col .w-status.open::before,
+    .weekly-col .w-status.closed::before { width: 4px; height: 4px; font-size: 0.42rem; }
     header::after { width: 40px; }
     .time-bar {
       padding: 10px 16px;
@@ -1692,15 +1705,16 @@ HTML_PAGE = """<!DOCTYPE html>
 
   @media (max-width: 420px) {
     .info-grid { grid-template-columns: 1fr; }
-    .weekly-card { padding: 14px 8px 10px; gap: 8px; }
-    .weekly-col { padding: 6px 2px 5px; }
-    .weekly-col .w-day { font-size: 0.6rem; }
-    .weekly-col .w-date { font-size: 0.42rem; margin-bottom: 3px; }
-    .weekly-col.today .w-day { font-size: 0.65rem; }
-    .weekly-col .w-today-tag { font-size: 0.42rem; padding: 1px 6px; }
-    .weekly-col .w-bar-area { height: 26px; margin-bottom: 3px; }
-    .weekly-col .w-bar { width: 50%; max-width: 14px; min-width: 6px; }
-    .weekly-col .w-info { font-size: 0.45rem; gap: 1px; }
+    .weekly-card { padding: 14px 8px 12px; }
+    .weekly-strip { gap: 4px; }
+    .weekly-col { padding: 8px 3px 8px; max-width: none; }
+    .weekly-col .w-today-tag { font-size: 0.38rem; padding: 1px 6px; margin-bottom: 3px; }
+    .weekly-col .w-day { font-size: 0.65rem; }
+    .weekly-col .w-date { font-size: 0.42rem; margin-bottom: 4px; }
+    .weekly-col .w-hours { font-size: 0.58rem; margin-bottom: 4px; }
+    .weekly-col .w-status { font-size: 0.5rem; padding: 1px 6px; }
+    .weekly-col .w-status.open::before,
+    .weekly-col .w-status.closed::before { width: 3px; height: 3px; font-size: 0.38rem; }
     .gender-rates { max-width: 100%; }
     .time-bar { flex-wrap: wrap; justify-content: center; gap: 6px; padding: 10px 12px; }
     .gauge-ring { width: 150px; height: 150px; }
@@ -1718,15 +1732,16 @@ HTML_PAGE = """<!DOCTYPE html>
     .container { padding: 10px 10px 32px; }
     header h1 { font-size: 1.2rem; }
     header p { font-size: 0.75rem; }
-    .weekly-card { padding: 12px 6px 8px; gap: 6px; }
-    .weekly-col { padding: 5px 1px 4px; }
-    .weekly-col .w-day { font-size: 0.55rem; }
-    .weekly-col .w-date { font-size: 0.38rem; margin-bottom: 2px; }
-    .weekly-col.today .w-day { font-size: 0.6rem; }
-    .weekly-col .w-today-tag { font-size: 0.38rem; padding: 0 5px; }
-    .weekly-col .w-bar-area { height: 22px; margin-bottom: 2px; }
-    .weekly-col .w-bar { width: 48%; max-width: 10px; min-width: 4px; }
-    .weekly-col .w-info { font-size: 0.4rem; gap: 1px; }
+    .weekly-card { padding: 12px 6px 10px; }
+    .weekly-strip { gap: 3px; }
+    .weekly-col { padding: 6px 2px 6px; max-width: none; }
+    .weekly-col .w-today-tag { font-size: 0.34rem; padding: 0 5px; margin-bottom: 2px; }
+    .weekly-col .w-day { font-size: 0.58rem; }
+    .weekly-col .w-date { font-size: 0.38rem; margin-bottom: 3px; }
+    .weekly-col .w-hours { font-size: 0.5rem; margin-bottom: 3px; }
+    .weekly-col .w-status { font-size: 0.45rem; padding: 1px 5px; }
+    .weekly-col .w-status.open::before,
+    .weekly-col .w-status.closed::before { width: 3px; height: 3px; font-size: 0.34rem; }
     .time-bar { font-size: 0.85rem; gap: 5px; padding: 8px 10px; }
     #clock-display { font-size: 0.85rem; }
     #date-display { font-size: 0.68rem; }
@@ -2206,10 +2221,9 @@ function renderForecast(forecast) {
   });
 
   document.getElementById('forecast-count').textContent = `${forecast.length}시간`;
-}  // ── Weekly schedule renderer (unified strip) ───────────────────────────────
+}  // ── Weekly schedule renderer (calendar) ────────────────────────────────────
 function renderWeeklySchedule(schedule) {
   const card = document.getElementById('weekly-card');
-  // Build a unified strip containing all 7 days
   const strip = document.createElement('div');
   strip.className = 'weekly-strip';
 
@@ -2220,34 +2234,19 @@ function renderWeeklySchedule(schedule) {
     if (d.is_closed) col.classList.add('closed-day');
     col.style.animationDelay = `${i * 0.05}s`;
 
-    const barHeight = d.is_closed ? 2 : Math.max(2, d.peak_level * 0.28 + 2);
-    const barColor = d.is_closed ? '#8b5cf6' : d.peak_color;
-    const compactHours = d.hours.replace(/:00/g, '');
+    const compactHours = d.is_closed ? '--:--' : d.hours.replace(/:00/g, '');
 
     col.innerHTML = `
       ${d.is_today ? '<div class="w-today-tag">TODAY</div>' : ''}
       <div class="w-day">${d.day_name}</div>
       <div class="w-date">${d.date}</div>
-      <div class="w-bar-area">
-        <div class="w-bar" style="height:2px;background:${barColor}"></div>
-      </div>
-      <div class="w-info">
-        ${d.is_closed
-          ? '<span class="w-status closed">휴장</span>'
-          : '<span class="w-hours">' + compactHours + '</span><span class="w-status open">운영</span>'
-        }
-      </div>
+      <div class="w-hours">${d.is_closed ? '휴장' : compactHours}</div>
+      <div class="w-status ${d.is_closed ? 'closed' : 'open'}">${d.is_closed ? '휴장' : '운영'}</div>
     `;
 
     strip.appendChild(col);
-
-    requestAnimationFrame(() => {
-      const bar = col.querySelector('.w-bar');
-      if (bar) bar.style.height = barHeight + 'px';
-    });
   });
 
-  // Replace card content
   card.innerHTML = '';
   card.appendChild(strip);
 }
