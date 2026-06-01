@@ -332,21 +332,16 @@ def _weekly_schedule(now: datetime) -> List[Dict]:
 
         # Determine operating hours string
         if closed_reason:
-            hours_str = "휴장"
+            hours_str = "--:--~--:--"
             status = "휴장"
             peak_level = 0
             peak_label = "휴장"
             peak_color = "#8b5cf6"
         else:
             if weekday == 6:  # Sunday
-                hours_str = "10:00~17:00"
-                status = "운영"
-            elif weekday == 5:  # Saturday
-                hours_str = "06:00~17:00"
-                status = "운영"
-            else:  # Weekday
-                hours_str = "06:00~20:00"
-                status = "운영"
+                start_h, end_h = _get_operating_hours(day)
+            hours_str = f"{start_h:02d}:00~{end_h:02d}:00"
+            status = "운영"
 
             # Estimate peak congestion level for this day
             # Check each operating hour to find peak
@@ -1418,9 +1413,10 @@ HTML_PAGE = """<!DOCTYPE html>
   }
   .weekly-item.today::before { opacity: 0.5; }
   .weekly-item.closed-day {
-    opacity: 0.5;
+    opacity: 0.55;
   }
   .weekly-item.closed-day .weekly-day { color: #a78bfa; }
+  .weekly-item.closed-day .weekly-today-tag { opacity: 1; }
   .weekly-item .weekly-day {
     font-size: 0.75rem;
     font-weight: 700;
