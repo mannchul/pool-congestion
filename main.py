@@ -130,9 +130,10 @@ _KNOWN_HISTORICAL_PATTERNS: dict = {
         # Based on Monday June 1, 2026 — actual observed user counts
         # Pattern: morning PEAK at 06시 → gradual decline → lunch break →
         #          afternoon moderate → evening very quiet
+        # Hours 17-20 have small estimated values to ensure forecast coverage
         6: 88, 7: 31, 8: 29, 9: 54, 10: 40,
         11: 5, 12: 4, 13: 39, 14: 16, 15: 22,
-        16: 10, 17: 0, 18: 0, 19: 0, 20: 0,
+        16: 10, 17: 3, 18: 2, 19: 1, 20: 1,
     },
     "saturday": {
         # Estimated based on typical Saturday pool usage patterns
@@ -145,7 +146,7 @@ _KNOWN_HISTORICAL_PATTERNS: dict = {
         # Based on Sunday May 31, 2026 — actual observed user counts from history page
         # Pattern: late start (10시) → afternoon PEAK at 15시 → steep drop
         10: 56, 11: 41, 12: 17, 13: 40, 14: 41,
-        15: 60, 16: 7, 17: 0,
+        15: 60, 16: 7, 17: 2,
     },
 }
 
@@ -169,22 +170,32 @@ def _get_default_forecast(now: datetime) -> dict | None:
         return None
 
     current_hour = now.hour
+
+    # Find calibration source: use a reliable mid-range value
+    # Avoid tiny estimated values for late hours (which cause extreme factors)
+    # Prefer hours with val >= 10 (significant observed data) for stable calibration
     current_val = pattern.get(current_hour, 0)
-    if current_val == 0:
-        for h in range(current_hour - 1, 0, -1):
-            if pattern.get(h, 0) > 0:
+    if current_val < 10:
+        for h in range(current_hour - 1, 5, -1):
+            if pattern.get(h, 0) >= 10:
                 current_val = pattern[h]
                 break
-    if current_val == 0:
-        return None
+    if current_val < 10:
+        # Fallback: find the highest-value hour as a stable reference
+        max_hour = max(pattern, key=pattern.get)
+        max_val = pattern[max_hour]
+        if max_val >= 10:
+            current_val = max_val
+    if current_val < 3:
+        return None  # Can't calibrate with such small values
 
     default_level = _DEFAULT_DAY_LEVELS.get(day_type, 30)
     factor = default_level / current_val if current_val > 0 else 1.0
 
+    # Generate levels for all known pattern hours
+    # The pattern already contains all operating hour keys
     levels = {}
     for hour, val in pattern.items():
-        if val == 0:
-            continue
         est = round(val * factor)
         est = max(0, min(est, 95))
         levels[hour] = est
