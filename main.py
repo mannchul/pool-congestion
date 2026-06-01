@@ -338,14 +338,12 @@ def _weekly_schedule(now: datetime) -> List[Dict]:
             peak_label = "휴장"
             peak_color = "#8b5cf6"
         else:
-            if weekday == 6:  # Sunday
-                start_h, end_h = _get_operating_hours(day)
+            start_h, end_h = _get_operating_hours(day)
             hours_str = f"{start_h:02d}:00~{end_h:02d}:00"
             status = "운영"
 
             # Estimate peak congestion level for this day
             # Check each operating hour to find peak
-            start_h, end_h = _get_operating_hours(day)
             peak_level = 0
             peak_label = "여유"
             peak_color = "#22c55e"
