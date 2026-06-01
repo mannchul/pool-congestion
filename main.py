@@ -1025,6 +1025,41 @@ HTML_PAGE = """<!DOCTYPE html>
   }
   .info-item .value.highlight { color: var(--accent); }
 
+  /* ── Combined hours card ────────────────────────────── */
+  .hours-combined {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 16px;
+    padding: 14px 22px;
+  }
+  .hours-row {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+  }
+  .hours-label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--text-dim);
+    letter-spacing: 0.5px;
+  }
+  .hours-value {
+    font-size: 0.88rem;
+    font-weight: 500;
+    color: var(--text-bright);
+    text-align: center;
+    line-height: 1.4;
+  }
+  .hours-divider {
+    width: 1px;
+    height: 40px;
+    background: linear-gradient(to bottom, transparent, rgba(56, 189, 248, 0.12), transparent);
+    flex-shrink: 0;
+  }
+
   /* ── Day-type badge ───────────────────────────────────── */
   .day-badge {
     display: inline-block;
@@ -1472,13 +1507,16 @@ HTML_PAGE = """<!DOCTYPE html>
 
     <!-- Pool info -->
     <div class="info-grid animate-in animate-in-delay-3">
-      <div class="info-item">
-        <div class="label">🕐 평일 운영</div>
-        <div class="value" id="weekday-hours">--</div>
-      </div>
-      <div class="info-item">
-        <div class="label">🕐 주말 운영</div>
-        <div class="value" id="weekend-hours">--</div>
+      <div class="info-item hours-combined" id="hours-card">
+        <div class="hours-row">
+          <span class="hours-label">🕐 평일</span>
+          <span class="hours-value" id="weekday-hours">--</span>
+        </div>
+        <div class="hours-divider"></div>
+        <div class="hours-row">
+          <span class="hours-label">🕐 주말</span>
+          <span class="hours-value" id="weekend-hours">--</span>
+        </div>
       </div>
     </div>
 
