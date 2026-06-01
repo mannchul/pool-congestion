@@ -1280,23 +1280,6 @@ HTML_PAGE = """<!DOCTYPE html>
     color: #f87171;
     border: 1px solid rgba(239, 68, 68, 0.12);
   }
-
-  /* ── Trend chart (integrated mini) ────────────────────── */
-  .forecast-trend {
-    width: 100%;
-    height: 60px;
-    margin-bottom: 16px;
-    position: relative;
-    overflow: hidden;
-    border-radius: var(--radius-xs);
-    background: rgba(0, 0, 0, 0.12);
-  }
-  .forecast-trend canvas {
-    width: 100%;
-    height: 100%;
-    display: block;
-  }
-
   /* ── Forecast ─────────────────────────────────────────── */
   .forecast-section { margin-top: 32px; }
 
@@ -1790,7 +1773,6 @@ HTML_PAGE = """<!DOCTYPE html>
     .forecast-item .bar { width: 14px; }
     .forecast-item .bar-wrap { height: 34px; margin-bottom: 3px; }
     .forecast-item .f-label { font-size: 0.58rem; }
-    .forecast-trend { height: 42px; margin-bottom: 12px; }
     .error-state .retry-btn { padding: 10px 24px; font-size: 0.82rem; }
     .loading { padding: 60px 14px; }
     .loading .spinner { width: 36px; height: 36px; }
@@ -1933,9 +1915,6 @@ HTML_PAGE = """<!DOCTYPE html>
       <div class="section-title">
         <span>📊</span> 시간대별 혼잡도 트렌드
         <span class="badge-count" id="forecast-count">13시간</span>
-      </div>
-      <div class="forecast-trend" id="forecast-trend">
-        <canvas id="trend-canvas" width="880" height="60"></canvas>
       </div>
       <div class="forecast-scroll-wrap" id="forecast-scroll-wrap">
         <div class="forecast-grid" id="forecast-grid">
@@ -2093,146 +2072,6 @@ function setGenderRates(male, female) {
   document.getElementById('female-rate').textContent = female + '%';
   animateBar(maleBar, Math.min(male, 100));
   animateBar(femaleBar, Math.min(female, 100));
-}
-
-// ── Trend chart (mini, responsive canvas) ────────────────────────────────
-function resizeTrendCanvas() {
-  const canvas = document.getElementById('trend-canvas');
-  if (!canvas) return;
-  const container = canvas.parentElement;
-  const w = container.clientWidth;
-  const h = container.clientHeight;
-  if (canvas.width !== w || canvas.height !== h) {
-    canvas.width = w;
-    canvas.height = h;
-  }
-}
-
-function renderTrendChart(trend) {
-  const canvas = document.getElementById('trend-canvas');
-  if (!canvas) return;
-
-  // Resize canvas to match container dimensions
-  resizeTrendCanvas();
-
-  const ctx = canvas.getContext('2d');
-  const w = canvas.width;
-  const h = canvas.height;
-  if (w === 0 || h === 0) return;
-
-  ctx.clearRect(0, 0, w, h);
-
-  const count = trend.length;
-  if (count < 2) {
-    // Show empty state
-    ctx.fillStyle = 'rgba(126, 147, 176, 0.2)';
-    ctx.font = '10px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('데이터 없음', w / 2, h / 2 + 3);
-    return;
-  }
-
-  // Responsive padding & sizes proportional to canvas height
-  const baseH = 60;
-  const scale = h / baseH;
-  const pad = { top: 6 * scale, bottom: 4 * scale, left: 4 * scale, right: 4 * scale };
-  const chartW = w - pad.left - pad.right;
-  const chartH = h - pad.top - pad.bottom;
-  const maxLevel = 100;
-
-  // Build points
-  const points = trend.map((d, i) => ({
-    x: pad.left + (i / (count - 1)) * chartW,
-    y: pad.top + chartH - (d.level / maxLevel) * chartH,
-    color: d.color,
-    level: d.level,
-    hour: d.hour,
-  }));
-
-  // Current time marker (find the hour closest to now in KST)
-  const now = getKST();
-  const nowHour = now.getHours() + now.getMinutes() / 60;
-  let nowIdx = -1;
-  for (let i = 0; i < trend.length; i++) {
-    const hh = parseInt(trend[i].hour.split(':')[0]);
-    const mm = parseInt(trend[i].hour.split(':')[1]);
-    const t = hh + mm / 60;
-    if (t <= nowHour) nowIdx = i;
-  }
-
-  // Fill area with gradient
-  ctx.beginPath();
-  ctx.moveTo(points[0].x, pad.top + chartH);
-  points.forEach(p => ctx.lineTo(p.x, p.y));
-  ctx.lineTo(points[points.length - 1].x, pad.top + chartH);
-  ctx.closePath();
-  const grad = ctx.createLinearGradient(0, pad.top, 0, pad.top + chartH);
-  grad.addColorStop(0, 'rgba(56, 189, 248, 0.12)');
-  grad.addColorStop(0.5, 'rgba(56, 189, 248, 0.04)');
-  grad.addColorStop(1, 'rgba(56, 189, 248, 0.005)');
-  ctx.fillStyle = grad;
-  ctx.fill();
-
-  // Draw line segments with per-segment color
-  ctx.lineWidth = 2;
-  ctx.lineJoin = 'round';
-  ctx.lineCap = 'round';
-  for (let i = 0; i < points.length - 1; i++) {
-    const p1 = points[i];
-    const p2 = points[i + 1];
-    const segColor = p1.level >= p2.level ? p1.color : p2.color;
-    ctx.beginPath();
-    ctx.moveTo(p1.x, p1.y);
-    ctx.lineTo(p2.x, p2.y);
-    ctx.strokeStyle = segColor;
-    ctx.stroke();
-  }
-
-  // Draw dots
-  points.forEach((p, i) => {
-    const isPast = i <= nowIdx;
-    const isNow = i === nowIdx;
-
-    // Glow for current time
-    if (isNow) {
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, 8, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(56, 189, 248, 0.12)';
-      ctx.fill();
-    }
-
-    // Main dot
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, isNow ? 4 : 2.5, 0, Math.PI * 2);
-    ctx.fillStyle = isPast ? p.color + '99' : p.color;
-    ctx.fill();
-    if (isNow) {
-      ctx.strokeStyle = 'rgba(56, 189, 248, 0.5)';
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
-    }
-
-    // Hour labels (every other, plus first/last)
-    if (i === 0 || i === count - 1 || i % 3 === 0) {
-      ctx.fillStyle = isPast ? 'rgba(126, 147, 176, 0.2)' : 'rgba(126, 147, 176, 0.35)';
-      ctx.font = '7px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText(p.hour, p.x, h - 1);
-    }
-  });
-
-  // Current time vertical line
-  if (nowIdx >= 0 && nowIdx < points.length) {
-    const p = points[nowIdx];
-    ctx.beginPath();
-    ctx.moveTo(p.x, pad.top);
-    ctx.lineTo(p.x, pad.top + chartH);
-    ctx.strokeStyle = 'rgba(56, 189, 248, 0.15)';
-    ctx.lineWidth = 1;
-    ctx.setLineDash([3, 3]);
-    ctx.stroke();
-    ctx.setLineDash([]);
-  }
 }
 
 // ── Forecast renderer ─────────────────────────────────────────────────────────
@@ -2423,10 +2262,6 @@ async function fetchData() {
     document.getElementById('weekday-hours').textContent = p.weekday_hours;
     document.getElementById('weekend-hours').textContent = p.weekend_hours;
 
-    // Trend chart (from embedded trend data)
-    _lastTrendData = data.trend;
-    renderTrendChart(data.trend);
-
     // Forecast
     renderForecast(data.forecast);
 
@@ -2437,18 +2272,6 @@ async function fetchData() {
     document.getElementById('error-msg').textContent = err.message;
   }
 }
-
-// ── Trend cache for resize re-rendering ──────────────────────────────────────
-let _lastTrendData = null;
-
-// ── Debounced resize handler for responsive canvas ──────────────────────────
-let _resizeTimer = null;
-window.addEventListener('resize', () => {
-  if (_resizeTimer) clearTimeout(_resizeTimer);
-  _resizeTimer = setTimeout(() => {
-    if (_lastTrendData) renderTrendChart(_lastTrendData);
-  }, 200);
-});
 
 // ── Init ─────────────────────────────────────────────────────────────────────
 
