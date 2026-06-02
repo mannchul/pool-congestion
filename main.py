@@ -367,6 +367,8 @@ def _scrape_live_data() -> Dict | None:
     'color', and 'scraped_at', or None if all scraping attempts fail.
     """
     global _LIVE_CACHE, _LIVE_CACHE_TIME
+    global _HISTORICAL_PREDICTIONS, _HISTORICAL_DATE
+    global _CHART_DATA, _CHART_PREDICTIONS, _CHART_PREDICTIONS_DATE
 
     now = datetime.now(ZoneInfo("Asia/Seoul"))
 
@@ -1019,11 +1021,7 @@ async def get_congestion():
     is_closed = closed_reason is not None
 
     # Try to get live data (skip if closed)
-    try:
-        live = _scrape_live_data() if not is_closed else None
-    except Exception as e:
-        return {"error": f"scrape_live_data failed: {type(e).__name__}: {e}",
-                "time": now.strftime("%Y-%m-%d %H:%M")}
+    live = _scrape_live_data() if not is_closed else None
 
     if live is not None:
         # Use live data for current, but get day_type/is_weekend from heuristic
