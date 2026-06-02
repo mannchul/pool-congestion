@@ -880,38 +880,14 @@ async def get_congestion():
     forecast = _hourly_forecast(now)
     trend = _daily_trend(now)
 
-    # ── Helper: apply predictions dict to override forecast/trend items ──
-    def _apply_levels(items: list, predictions: dict) -> None:
-        for item in items:
-            h = int(item["hour"].split(":")[0])
-            level = predictions.get(h)
-            if level is not None:
-                item["level"] = level
-                if level < 30:
-                    item["label"] = "여유"
-                    item["color"] = "#22c55e"
-                elif level < 50:
-                    item["label"] = "보통"
-                    item["color"] = "#eab308"
-                elif level < 70:
-                    item["label"] = "혼잡"
-                    item["color"] = "#f97316"
-                else:
-                    item["label"] = "매우혼잡"
-                    item["color"] = "#ef4444"
-
-    # ── Override with historical-based predictions (priority order) ──
-    # Priority 1: Historical predictions from yesterday/last_week data (3-day expiry)
-    _hist_cutoff = (now - timedelta(days=3)).strftime("%Y-%m-%d")
-    if _HISTORICAL_PREDICTIONS and _HISTORICAL_DATE and _HISTORICAL_DATE >= _hist_cutoff:
-        _apply_levels(forecast, _HISTORICAL_PREDICTIONS)
-        _apply_levels(trend, _HISTORICAL_PREDICTIONS)
-    # Priority 2: Chart predictions from today's live data (same-day expiry)
-    elif _CHART_PREDICTIONS and _CHART_PREDICTIONS_DATE == now.strftime("%Y-%m-%d"):
+    # ── Override forecast/trend with predictions (sanitized) ──
+    # Uses a sanity check: predicted level cannot deviate more than 20 points
+    # from the original heuristic baseline to prevent unrealistic values.
+    # Priority 1: Chart predictions from today's live data (same-day expiry, most relevant)
+    if _CHART_PREDICTIONS and _CHART_PREDICTIONS_DATE == now.strftime("%Y-%m-%d"):
         _apply_levels(forecast, _CHART_PREDICTIONS)
         _apply_levels(trend, _CHART_PREDICTIONS)
-    # Priority 3: Default predictions from known historical patterns (always available)
-    # These are pre-populated at startup via _init_default_predictions()
+    # Priority 2: Default predictions from known historical patterns (always available)
     elif _HISTORICAL_PREDICTIONS and _HISTORICAL_DATE:
         _apply_levels(forecast, _HISTORICAL_PREDICTIONS)
         _apply_levels(trend, _HISTORICAL_PREDICTIONS)
