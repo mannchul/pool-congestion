@@ -938,6 +938,24 @@ async def get_congestion():
     }
 
 
+@app.get("/api/health")
+async def health_check():
+    """Health check endpoint for Vercel monitoring."""
+    now = _now_kst()
+    live = _LIVE_CACHE is not None
+    chart = _CHART_PREDICTIONS_DATE == now.strftime("%Y-%m-%d")
+    return {
+        "status": "healthy",
+        "timestamp": now.isoformat(),
+        "data_sources": {
+            "live_cache": live,
+            "chart_predictions_today": chart,
+            "historical_predictions": bool(_HISTORICAL_PREDICTIONS),
+        },
+        "version": "0.1.0",
+    }
+
+
 @app.get("/api/daily-trend")
 async def get_daily_trend():
     """Return full-day congestion trend data as JSON."""
@@ -963,7 +981,12 @@ async def get_weekly_schedule():
 @app.get("/", response_class=HTMLResponse)
 async def index():
     """Render the main congestion dashboard page."""
-    return HTMLResponse(HTML_PAGE)
+    return HTMLResponse(
+        content=HTML_PAGE,
+        headers={
+            "Cache-Control": "public, s-maxage=60, stale-while-revalidate=30",
+        },
+    )
 
 
 HTML_PAGE = """<!DOCTYPE html>

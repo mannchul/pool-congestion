@@ -1,0 +1,20 @@
+# Python cache directories
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Test files & artifacts
+test_main.py
+.pytest_cache/
+
+# Local development environment
+.venv/
+
+# Local dotfiles (not needed for deployment)
+.gitignore
+
+# Documentation
+README.md
+
+# Lock files (Vercel only uses requirements.txt)
+uv.lock

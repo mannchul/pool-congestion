@@ -7,6 +7,20 @@
   ],
   "routes": [
     {
+      "src": "/api/(.*)",
+      "dest": "main.py",
+      "headers": {
+        "Cache-Control": "public, s-maxage=30, stale-while-revalidate=15"
+      }
+    },
+    {
+      "src": "/",
+      "dest": "main.py",
+      "headers": {
+        "Cache-Control": "public, s-maxage=60, stale-while-revalidate=30"
+      }
+    },
+    {
       "src": "/(.*)",
       "dest": "main.py"
     }
