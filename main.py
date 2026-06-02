@@ -921,13 +921,42 @@ async def get_congestion():
     # Uses a sanity check: predicted level cannot deviate more than 20 points
     # from the original heuristic baseline to prevent unrealistic values.
     # Priority 1: Chart predictions from today's live data (same-day expiry, most relevant)
+    predictions_to_use = None
     if _CHART_PREDICTIONS and _CHART_PREDICTIONS_DATE == now.strftime("%Y-%m-%d"):
         _apply_levels(forecast, _CHART_PREDICTIONS)
         _apply_levels(trend, _CHART_PREDICTIONS)
+        predictions_to_use = _CHART_PREDICTIONS
     # Priority 2: Default predictions from known historical patterns (always available)
     elif _HISTORICAL_PREDICTIONS and _HISTORICAL_DATE:
         _apply_levels(forecast, _HISTORICAL_PREDICTIONS)
         _apply_levels(trend, _HISTORICAL_PREDICTIONS)
+        predictions_to_use = _HISTORICAL_PREDICTIONS
+
+    # ── Also apply predictions to the current gauge value when heuristic ──
+    # When live data is unavailable, the current level comes from raw heuristic.
+    # Predictions (calibrated from known patterns) are more accurate, so we
+    # override the current value with the prediction for this hour.
+    # The same ±20 max_delta clamp is applied to prevent unrealistic swings.
+    if current["data_source"] == "heuristic" and not is_closed and predictions_to_use:
+        current_hour = now.hour
+        if current_hour in predictions_to_use:
+            orig = current["level"]
+            pred = predictions_to_use[current_hour]
+            clamped = max(orig - 20, min(pred, orig + 20))
+            clamped = max(0, min(clamped, 100))
+            current["level"] = clamped
+            if clamped < 30:
+                current["label"] = "여유"
+                current["color"] = "#22c55e"
+            elif clamped < 50:
+                current["label"] = "보통"
+                current["color"] = "#eab308"
+            elif clamped < 70:
+                current["label"] = "혼잡"
+                current["color"] = "#f97316"
+            else:
+                current["label"] = "매우혼잡"
+                current["color"] = "#ef4444"
 
     return {
         "current": current,
