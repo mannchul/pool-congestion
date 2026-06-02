@@ -441,7 +441,6 @@ def _scrape_live_data() -> Dict | None:
 
             _LIVE_CACHE = result
             _LIVE_CACHE_TIME = now
-            reset_cache = False
 
             # ── Extract Google Chart hourly usage data ──
             chart_data = _extract_chart_data(raw)
