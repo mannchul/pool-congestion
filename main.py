@@ -127,11 +127,11 @@ _LIVE_HEADERS = {
 # Used as default predictions when live scraping is unavailable.
 _KNOWN_HISTORICAL_PATTERNS: dict = {
     "weekday": {
-        # Updated from latest scrape data (June 2, ~18:00 KST)
-        # Pattern: morning PEAK at 06시 (88 users) → gradual decline →
+        # Updated from latest scrape data (June 2, 2026 09:32 KST)
+        # Pattern: morning PEAK at 06시 (93 users) → gradual decline →
         #          lunch break → afternoon moderate → evening very quiet
         # Note: Data varies daily. The RELATIVE pattern is consistent.
-        6: 88, 7: 31, 8: 29, 9: 54, 10: 40,
+        6: 93, 7: 29, 8: 42, 9: 22, 10: 40,
         11: 5, 12: 4, 13: 39, 14: 16, 15: 22,
         16: 20, 17: 17, 18: 2, 19: 1, 20: 1,
     },
@@ -152,7 +152,7 @@ _KNOWN_HISTORICAL_PATTERNS: dict = {
 
 # Default calibration levels by day type (typical congestion % at current hour)
 _DEFAULT_DAY_LEVELS: dict = {
-    "weekday": 28,    # 28% actual current utilization (updated from latest scrape)
+    "weekday": 38,    # 38% actual current utilization (updated from latest scrape)
     "saturday": 55,   # 55% typical for Saturday 14시
     "sunday": 50,     # 50% typical for Sunday 15시
 }
@@ -289,15 +289,23 @@ def _scrape_live_data() -> Dict | None:
     male_pct = int(percentages[1]) if len(percentages) > 1 else total_pct // 2
     female_pct = int(percentages[2]) if len(percentages) > 2 else total_pct // 2
 
-    # Determine label from class name (search the whole page)
-    # bg_spare = 여유, bg_general = 보통, bg_congestion = 혼잡
+    # Determine label from the "whole bg_xxx" class (total utilization section)
+    # whole bg_spare = 여유, whole bg_general = 보통, whole bg_congestion = 혼잡
     status_label = "여유"
-    if _re.search(rb"bg_congestion", raw):
-        status_label = "혼잡"
-    elif _re.search(rb"bg_general", raw):
-        status_label = "보통"
-    elif _re.search(rb"bg_spare", raw):
-        status_label = "여유"
+    whole_match = _re.search(rb'class="whole bg_([^"]+)"', raw)
+    if whole_match:
+        cls = whole_match.group(1)
+        if cls == b"congestion":
+            status_label = "혼잡"
+        elif cls == b"general":
+            status_label = "보통"
+        # else bg_spare → stays "여유"
+    else:
+        # Fallback: search anywhere on the page
+        if _re.search(rb"bg_congestion", raw):
+            status_label = "혼잡"
+        elif _re.search(rb"bg_general", raw):
+            status_label = "보통"
 
     # Colour mapping
     if total_pct < 30:
@@ -424,6 +432,8 @@ def _chart_to_levels(chart_data: dict, now: datetime) -> dict | None:
 
     levels = {}
     for hour, users in chart_data.items():
+        if users == 0:  # Skip hours with no data (future hours)
+            continue
         est = round(users * factor)
         est = max(0, min(est, 95))  # Clamp 0-95
         levels[hour] = est
@@ -492,7 +502,9 @@ def _build_historical_predictions(hist_data: dict, now: datetime) -> dict | None
     current_level = _LIVE_CACHE["level"]
 
     # Calibration factor: current utilization / historical source value
-    factor = current_level / pattern_source
+    # Clamp factor to prevent extreme amplification from tiny historical values
+    factor = current_level / pattern_source if pattern_source > 0 else 1.0
+    factor = max(0.3, min(factor, 3.0))
 
     levels = {}
     for hour, data in hist_data.items():
