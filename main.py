@@ -837,6 +837,43 @@ def _daily_trend(now: datetime) -> List[Dict]:
     return trend
 
 
+def _apply_levels(entries: List[Dict], predictions: Dict, max_delta: int = 20) -> None:
+    """Override forecast/trend entries with prediction levels, clamped to max_delta.
+
+    For each entry whose hour matches a key in predictions, the entry's level
+    is replaced with the predicted level, clamped so it cannot deviate more
+    than max_delta points from the original heuristic baseline.
+    Label and color are updated to match the clamped level.
+    """
+    for entry in entries:
+        hour_str = entry.get("hour", "")
+        if not hour_str or ":" not in hour_str:
+            continue
+        try:
+            hour = int(hour_str.split(":")[0])
+        except (ValueError, IndexError):
+            continue
+        if hour not in predictions:
+            continue
+        orig = entry["level"]
+        pred = predictions[hour]
+        clamped = max(orig - max_delta, min(pred, orig + max_delta))
+        clamped = max(0, min(clamped, 100))
+        entry["level"] = clamped
+        if clamped < 30:
+            entry["label"] = "\uc5ec\uc720"
+            entry["color"] = "#22c55e"
+        elif clamped < 50:
+            entry["label"] = "\ubcf4\ud1b5"
+            entry["color"] = "#eab308"
+        elif clamped < 70:
+            entry["label"] = "\ud63c\uc7a1"
+            entry["color"] = "#f97316"
+        else:
+            entry["label"] = "\ub9e4\uc6b0\ud63c\uc7a1"
+            entry["color"] = "#ef4444"
+
+
 # ── API endpoints ───────────────────────────────────────────────────────────
 
 @app.get("/api/congestion")
