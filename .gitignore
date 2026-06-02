@@ -10,3 +10,6 @@ wheels/
 .venv
 .vercel
 nul
+
+# Server logs
+*.log
