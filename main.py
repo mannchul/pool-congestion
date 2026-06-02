@@ -8,6 +8,7 @@ from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
+import json
 import re as _re
 import ssl
 import urllib.request
@@ -102,6 +103,27 @@ _LIVE_URLS = [
         "&searchType=PL004"
     ),
 ]
+
+# JSON API endpoint for real-time user counts (returns per-area counts)
+_LIVE_JSON_URL = (
+    "https://www.jjss.or.kr/reserv/index.9is"
+    "?contentUid=5232d76d8f9541480190a48b3951498f"
+)
+
+# PL004 (swimming pool) congestion thresholds (from jjss.or.kr live page JavaScript):
+# determineClass(totalCount, spare_threshold, congestion_threshold)
+# count < spare_threshold → 여유 (spare)
+# spare_threshold <= count < congestion_threshold → 보통 (general)
+# count >= congestion_threshold → 혼잡 (congestion)
+_PL004_SPARE_THRESHOLD = 44
+_PL004_CONGESTION_THRESHOLD = 93
+
+# PL004 max capacity for percentage calculation
+_PL004_MAX_CAPACITY = 144
+
+# PL004 gender capacities (from jjss.or.kr live page: calculatePercentage(manCount, 196))
+_PL004_MAN_CAPACITY = 196
+_PL004_WOMAN_CAPACITY = 270
 
 # History page URL (includes yesterday/lastWeek comparative data)
 _HISTORY_URL = (
@@ -240,12 +262,106 @@ def _try_fetch_url(url: str, timeout: int = 10) -> bytes | None:
         return None
 
 
+def _parse_live_json(raw: bytes) -> Dict | None:
+    """Parse the JSON API response and extract utilization data for PL004.
+
+    The JSON endpoint returns per-area usage data:
+      [{"AREA":"PL004","manCount":"17","womanCount":"32","totalCount":"49"}, ...]
+
+    Calculates the percentage using the same thresholds as jjss.or.kr:
+      - totalClass = determineClass(totalCount, 44, 93)
+      - Maps count to a percentage that matches the statistics page display.
+
+    Returns a dict with 'level', 'male_rate', 'female_rate', 'label',
+    'color', and 'scraped_at', or None if parsing fails.
+    """
+    try:
+        data = json.loads(raw)
+    except (json.JSONDecodeError, ValueError):
+        return None
+
+    if not isinstance(data, list):
+        return None
+
+    # Find PL004 (swimming pool) entry
+    pl004 = None
+    for entry in data:
+        if isinstance(entry, dict) and entry.get("AREA") == "PL004":
+            pl004 = entry
+            break
+
+    if pl004 is None:
+        return None
+
+    try:
+        total_count = int(pl004.get("totalCount", 0))
+        man_count = int(pl004.get("manCount", 0))
+        woman_count = int(pl004.get("womanCount", 0))
+    except (ValueError, TypeError):
+        return None
+
+    if total_count <= 0:
+        return None
+
+    # Determine status using the same thresholds as jjss.or.kr
+    spare_th = _PL004_SPARE_THRESHOLD     # 44: below this = 여유
+    congest_th = _PL004_CONGESTION_THRESHOLD  # 93: at or above this = 혼잡
+
+    if total_count < spare_th:
+        # 여유 range: 0 ~ spare_th → map to 0~30%
+        level = round(total_count / spare_th * 30)
+        label = "여유"
+    elif total_count < congest_th:
+        # 보통 range: spare_th ~ congest_th → map to 30~60%
+        pct = (total_count - spare_th) / (congest_th - spare_th)
+        level = 30 + round(pct * 30)
+        label = "보통"
+    else:
+        # 혼잡 range: congest_th ~ max → map to 60~95%
+        max_range = _PL004_MAX_CAPACITY - congest_th
+        if max_range <= 0:
+            level = 95
+        else:
+            pct = min((total_count - congest_th) / max_range, 1.0)
+            level = 60 + round(pct * 35)
+        label = "혼잡"
+
+    level = max(0, min(level, 95))
+
+    # Calculate male/female percentages using the live page's formula:
+    # manPercent = round(manCount / 196 * 100)
+    # womanPercent = round(womanCount / 270 * 100)
+    male_pct = round(man_count / _PL004_MAN_CAPACITY * 100) if man_count > 0 else 0
+    female_pct = round(woman_count / _PL004_WOMAN_CAPACITY * 100) if woman_count > 0 else 0
+    male_pct = max(0, min(male_pct, 100))
+    female_pct = max(0, min(female_pct, 100))
+
+    # Colour mapping (same as existing)
+    if level < 30:
+        color = "#22c55e"
+    elif level < 50:
+        color = "#eab308"
+    elif level < 70:
+        color = "#f97316"
+    else:
+        color = "#ef4444"
+
+    return {
+        "level": level,
+        "label": label,
+        "color": color,
+        "male_rate": male_pct,
+        "female_rate": female_pct,
+    }
+
+
 def _scrape_live_data() -> Dict | None:
     """Scrape real-time congestion data from jjss.or.kr.
 
-    Uses urllib for HTTP requests with multiple URL fallbacks.
-    Parses HTML using regex patterns.
-    Handles EUC-KR encoded pages.
+    Strategy (in order):
+    1. JSON API endpoint (lightweight, same-domain as stats page, may bypass IP blocks)
+    2. HTML statistics page (current approach, gives exact percentage)
+    3. History page for predictions
 
     Returns a dict with 'level', 'male_rate', 'female_rate', 'label',
     'color', and 'scraped_at', or None if all scraping attempts fail.
@@ -259,102 +375,117 @@ def _scrape_live_data() -> Dict | None:
         if (now - _LIVE_CACHE_TIME).total_seconds() < 60:
             return _LIVE_CACHE
 
-    raw = None
+    # ── Strategy 1: JSON API (lightweight, returns raw user counts) ──
+    json_raw = _try_fetch_url(_LIVE_JSON_URL, timeout=8)
+    if json_raw and len(json_raw) > 20:
+        json_result = _parse_live_json(json_raw)
+        if json_result is not None:
+            json_result["scraped_at"] = now
+            _LIVE_CACHE = json_result
+            _LIVE_CACHE_TIME = now
+            return json_result
 
-    # Try each URL
+    # ── Strategy 2: HTML statistics page ──
+    raw = None
     for url in _LIVE_URLS:
         result = _try_fetch_url(url)
         if result is not None and len(result) > 100:
             raw = result
             break
 
-    if raw is None:
-        # Cache the failure briefly to avoid hammering the site
-        _LIVE_CACHE = None
-        _LIVE_CACHE_TIME = now
-        return None
+    if raw is not None:
+        # Parse with regex on raw bytes
+        # Find all percentage patterns: >XX%< in the entire page
+        percentages = _re.findall(rb">(\d+)%<", raw)
 
-    # Parse with regex on raw bytes
-    # Find all percentage patterns: >XX%< in the entire page
-    percentages = _re.findall(rb">(\d+)%<", raw)
+        if len(percentages) >= 1:
+            total_pct = int(percentages[0])
 
-    if len(percentages) < 1:
-        _LIVE_CACHE = None
-        _LIVE_CACHE_TIME = now
-        return None
+            # Male/female rates: 2nd = male (man), 3rd = female (woman)
+            male_pct = int(percentages[1]) if len(percentages) > 1 else total_pct // 2
+            female_pct = int(percentages[2]) if len(percentages) > 2 else total_pct // 2
 
-    total_pct = int(percentages[0])
+            # Determine label from the "whole bg_xxx" class
+            status_label = "여유"
+            whole_match = _re.search(rb'class="whole bg_([^"]+)"', raw)
+            if whole_match:
+                cls = whole_match.group(1)
+                if cls == b"congestion":
+                    status_label = "혼잡"
+                elif cls == b"general":
+                    status_label = "보통"
+            else:
+                if _re.search(rb"bg_congestion", raw):
+                    status_label = "혼잡"
+                elif _re.search(rb"bg_general", raw):
+                    status_label = "보통"
 
-    # Male/female rates: 2nd = male (man), 3rd = female (woman) in page order
-    male_pct = int(percentages[1]) if len(percentages) > 1 else total_pct // 2
-    female_pct = int(percentages[2]) if len(percentages) > 2 else total_pct // 2
+            # Colour mapping
+            if total_pct < 30:
+                color = "#22c55e"
+            elif total_pct < 50:
+                color = "#eab308"
+            elif total_pct < 70:
+                color = "#f97316"
+            else:
+                color = "#ef4444"
 
-    # Determine label from the "whole bg_xxx" class (total utilization section)
-    # whole bg_spare = 여유, whole bg_general = 보통, whole bg_congestion = 혼잡
-    status_label = "여유"
-    whole_match = _re.search(rb'class="whole bg_([^"]+)"', raw)
-    if whole_match:
-        cls = whole_match.group(1)
-        if cls == b"congestion":
-            status_label = "혼잡"
-        elif cls == b"general":
-            status_label = "보통"
-        # else bg_spare → stays "여유"
-    else:
-        # Fallback: search anywhere on the page
-        if _re.search(rb"bg_congestion", raw):
-            status_label = "혼잡"
-        elif _re.search(rb"bg_general", raw):
-            status_label = "보통"
+            result = {
+                "level": total_pct,
+                "label": status_label,
+                "color": color,
+                "male_rate": male_pct,
+                "female_rate": female_pct,
+                "scraped_at": now,
+            }
 
-    # Colour mapping
-    if total_pct < 30:
-        color = "#22c55e"
-    elif total_pct < 50:
-        color = "#eab308"
-    elif total_pct < 70:
-        color = "#f97316"
-    else:
-        color = "#ef4444"
+            _LIVE_CACHE = result
+            _LIVE_CACHE_TIME = now
+            reset_cache = False
 
-    result = {
-        "level": total_pct,
-        "label": status_label,
-        "color": color,
-        "male_rate": male_pct,
-        "female_rate": female_pct,
-        "scraped_at": now,
-    }
+            # ── Extract Google Chart hourly usage data ──
+            chart_data = _extract_chart_data(raw)
+            if chart_data:
+                _CHART_DATA.clear()
+                _CHART_DATA.update(chart_data)
 
-    _LIVE_CACHE = result
+                predictions = _chart_to_levels(chart_data, now)
+                if predictions:
+                    _CHART_PREDICTIONS.clear()
+                    _CHART_PREDICTIONS.update(predictions)
+                    _CHART_PREDICTIONS_DATE = now.strftime("%Y-%m-%d")
+
+            # ── Fetch history page ──
+            hist_raw = _try_fetch_url(_HISTORY_URL)
+            if hist_raw and len(hist_raw) > 100:
+                hist_data = _extract_historical_data(hist_raw)
+                if hist_data:
+                    hist_predictions = _build_historical_predictions(hist_data, now)
+                    if hist_predictions:
+                        _HISTORICAL_PREDICTIONS.clear()
+                        _HISTORICAL_PREDICTIONS.update(hist_predictions)
+                        _HISTORICAL_DATE = now.strftime("%Y-%m-%d")
+
+            return result
+
+    # ── All strategies failed ──
+    _LIVE_CACHE = None
     _LIVE_CACHE_TIME = now
+    
+    # Even though the main scrape failed, try history page in background
+    # for predictions (may still work if only main page is blocked)
+    if _HISTORICAL_PREDICTIONS and not _HISTORICAL_DATE == now.strftime("%Y-%m-%d"):
+        hist_raw = _try_fetch_url(_HISTORY_URL)
+        if hist_raw and len(hist_raw) > 100:
+            hist_data = _extract_historical_data(hist_raw)
+            if hist_data:
+                hist_predictions = _build_historical_predictions(hist_data, now)
+                if hist_predictions:
+                    _HISTORICAL_PREDICTIONS.clear()
+                    _HISTORICAL_PREDICTIONS.update(hist_predictions)
+                    _HISTORICAL_DATE = now.strftime("%Y-%m-%d")
 
-    # ── Extract Google Chart hourly usage data ──
-    chart_data = _extract_chart_data(raw)
-    if chart_data:
-        _CHART_DATA.clear()
-        _CHART_DATA.update(chart_data)
-
-        # Generate hourly congestion predictions from chart data
-        predictions = _chart_to_levels(chart_data, now)
-        if predictions:
-            _CHART_PREDICTIONS.clear()
-            _CHART_PREDICTIONS.update(predictions)
-            _CHART_PREDICTIONS_DATE = now.strftime("%Y-%m-%d")
-
-    # ── Fetch history page (yesterday + last_week) ──
-    hist_raw = _try_fetch_url(_HISTORY_URL)
-    if hist_raw and len(hist_raw) > 100:
-        hist_data = _extract_historical_data(hist_raw)
-        if hist_data:
-            # Build improved predictions using historical patterns
-            hist_predictions = _build_historical_predictions(hist_data, now)
-            if hist_predictions:
-                _HISTORICAL_PREDICTIONS.clear()
-                _HISTORICAL_PREDICTIONS.update(hist_predictions)
-                _HISTORICAL_DATE = now.strftime("%Y-%m-%d")
-
-    return result
+    return None
 
 
 def _extract_chart_data(raw: bytes) -> dict | None:
