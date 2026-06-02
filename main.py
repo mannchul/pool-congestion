@@ -1019,7 +1019,11 @@ async def get_congestion():
     is_closed = closed_reason is not None
 
     # Try to get live data (skip if closed)
-    live = _scrape_live_data() if not is_closed else None
+    try:
+        live = _scrape_live_data() if not is_closed else None
+    except Exception as e:
+        return {"error": f"scrape_live_data failed: {type(e).__name__}: {e}",
+                "time": now.strftime("%Y-%m-%d %H:%M")}
 
     if live is not None:
         # Use live data for current, but get day_type/is_weekend from heuristic
